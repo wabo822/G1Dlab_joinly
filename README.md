@@ -26,19 +26,36 @@ elles ne sont pas encore implémentées dans ce dépôt.
 - Faciliter la découverte d'activités correspondant aux envies des utilisateurs.
 - Simplifier la réservation d'une place et le suivi de ses inscriptions.
 - Permettre aux organisateurs de publier et de gérer leurs événements.
-- Proposer une expérience accessible sur ordinateur et sur mobile.
+- Adapter progressivement l'interface aux écrans d'ordinateur et de mobile, selon les priorités ci-dessous.
 - Réaliser une application complète reliant interface web, serveur et base de données.
 
 ## Fonctionnalités prévues
 
 | Domaine | Fonctionnalités envisagées |
 | --- | --- |
-| Comptes utilisateurs | Inscription, connexion et gestion du profil. |
-| Découverte | Liste des activités et recherche par catégorie, lieu ou date. |
+| Comptes utilisateurs | Inscription avec différents rôles utilisateurs, connexion et modification du profil. |
+| Découverte | Liste des activités et recherche par mots-clés ; recherche multicritère selon l'avancement. |
 | Détail d'une activité | Description, date, lieu, organisateur et places disponibles. |
 | Réservations | Inscription à une activité, annulation et consultation de ses réservations. |
 | Organisation | Création et modification d'événements, gestion des capacités et des participants. |
-| Interface | Navigation adaptée aux écrans d'ordinateur et de mobile. |
+| Interface | Page d'accueil ; adaptation responsive aux écrans d'ordinateur et de mobile selon l'avancement. |
+
+## Exigences fonctionnelles et priorités
+
+Les exigences suivantes reprennent les consignes fournies pour le projet.
+Elles complètent les fonctionnalités propres à Joinly présentées ci-dessus.
+Le niveau de priorité détermine ce qui doit être réalisé et ce qui pourra être
+ajouté selon l'avancement du groupe.
+
+| Priorité | Niveau d'exigence | Fonctionnalités demandées |
+| --- | --- | --- |
+| **Haute** | **Toutes les fonctionnalités doivent être réalisées.** | Page d'accueil ; inscription avec différents rôles utilisateurs ; connexion ; modification des informations personnelles ; FAQ ; conditions générales d'utilisation (CGU) ; mentions légales ; recherche par mots-clés ; page de contact. Le back-office doit permettre de gérer les utilisateurs et leurs permissions, la FAQ, les CGU et les mentions légales. |
+| **Moyenne** | À réaliser selon l'avancement. | Réinitialisation du mot de passe ; recherche multicritère ; pages responsive adaptées notamment aux écrans de téléphone. |
+| **Basse** | Extensions à envisager selon l'avancement. | Messagerie interne ; forum ; accessibilité ; prise en charge de plusieurs langues, ainsi que les fonctions de back-office associées. |
+
+Les rôles utilisateurs et leurs permissions seront précisés lors de la
+conception. Les exigences de priorité haute constituent le socle obligatoire ;
+les niveaux moyen et bas restent conditionnés par l'avancement du projet.
 
 ## Parcours utilisateur envisagé
 
@@ -100,8 +117,11 @@ documentés ici avec l'ajout du code.
 - [ ] Valider le périmètre fonctionnel et les parcours utilisateurs.
 - [ ] Choisir les technologies du frontend, du backend et de la base de données.
 - [ ] Concevoir les maquettes et le modèle de données.
+- [ ] Réaliser toutes les exigences de priorité haute, y compris le back-office.
 - [ ] Développer la découverte d'activités et la gestion des événements.
 - [ ] Implémenter l'authentification et les réservations.
+- [ ] Ajouter les fonctionnalités de priorité moyenne selon l'avancement.
+- [ ] Étudier les extensions de priorité basse selon l'avancement.
 - [ ] Tester les parcours, notamment les capacités et les annulations.
 - [ ] Déployer l'application et compléter la documentation technique.
 
