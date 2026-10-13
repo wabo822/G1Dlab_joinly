@@ -40,6 +40,32 @@ elles ne sont pas encore implémentées dans ce dépôt.
 | Organisation | Création et modification d'événements, gestion des capacités et des participants. |
 | Interface | Page d'accueil ; adaptation responsive aux écrans d'ordinateur et de mobile selon l'avancement. |
 
+## Modèle économique envisagé
+
+Les pistes suivantes restent à valider avec le tuteur et le client ; elles ne
+sont pas encore implémentées. Les tarifs et commissions restent à définir.
+
+| Source de revenus | Mise en œuvre dans Joinly | Qui paie / ce que gagne Joinly |
+| --- | --- | --- |
+| Commission sur les réservations | Prélever une commission sur chaque réservation d'activité payante. | L'organisateur reverse une part du prix de la réservation à Joinly. |
+| Location de matériel | Proposer à la réservation des chaussures ou bâtons de randonnée, raquettes ou tentes, selon les tailles et stocks disponibles. | Le participant paie le fournisseur ; Joinly reçoit une commission sur la location. |
+| Services supplémentaires | Ajouter un panier-repas, un transport vers le lieu de rendez-vous ou des photos retouchées. | Le participant paie le prestataire ; Joinly reçoit une commission sur ces options. |
+| Encadrement professionnel | Réserver un guide de randonnée, un coach d'escalade ou un mentor en photographie. | Le participant paie le professionnel ; Joinly reçoit une commission sur la prestation. |
+| Formules d'activité | Proposer plusieurs formules : atelier seul, atelier avec matériel, ou expérience complète avec repas. | Le participant paie l'organisateur ; Joinly reçoit une commission sur la formule réservée. |
+| Abonnement membre — Joinly Plus | Offrir des réductions sur certaines activités, des bons de location et un accès anticipé à certaines inscriptions. | Le membre paie un abonnement ; Joinly perçoit la cotisation, avec des avantages convenus avec les partenaires. |
+| Abonnement organisateur Pro | Donner accès à davantage de publications, aux statistiques, au suivi des présences et à l'export des participants. | L'organisateur paie un abonnement ; Joinly perçoit la cotisation. |
+| Sponsoring et publicité | Afficher des espaces publicitaires ou des activités sponsorisées clairement identifiés. | Une marque, un commerçant ou un organisateur paie Joinly pour la visibilité. |
+| Offre entreprise / team building | Organiser des activités de groupe selon le budget, la date et le nombre de salariés. | L'entreprise paie les activités et des frais de coordination ; ces frais rémunèrent Joinly. |
+| Affiliation | Recommander des équipements ou activités partenaires via des liens suivis. | Le partenaire verse une commission à Joinly lorsqu'un achat ou une réservation est attribué au lien. |
+| Activités organisées par Joinly | Créer des soirées de rencontre, sorties urbaines ou sessions de jeux de société. | Les participants paient Joinly ; le revenu restant après les coûts d'organisation constitue sa marge. |
+| Services ponctuels aux organisateurs | Proposer la configuration d'une page d'inscription, un service de photographie ou la gestion de l'accueil et du pointage sur place. | L'organisateur paie à la prestation ; Joinly conserve le montant restant après les coûts de réalisation. |
+
+La location, les options, l'encadrement et les formules sont différentes offres
+auxquelles peut s'appliquer la commission, sans cumuler automatiquement plusieurs
+commissions sur une même vente. La navigation, la recherche et l'inscription aux
+activités gratuites resteraient gratuites. La commission sur les réservations
+constitue la piste principale ; les autres offres seraient ajoutées progressivement.
+
 ## Exigences fonctionnelles et priorités
 
 Les exigences suivantes reprennent les consignes fournies pour le projet.

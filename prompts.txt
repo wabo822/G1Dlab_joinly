@@ -6,3 +6,7 @@ Résultat : index.html, activites.html, a-propos.html et style.css ; documentati
 2026-10-13 — Exigences fonctionnelles détaillées
 Demande : 先把这个翻译，再把这个要求加进去 加到 readme
 Objectif : traduire le tableau fourni, puis reprendre ses 22 fonctionnalités et leurs priorités dans le README, avec la validation des fonctionnalités supplémentaires par le tuteur et le client.
+
+2026-10-13 — Modèle économique envisagé
+Demande : 我觉得你可以把所有的赚钱方式都加进 readme，简单一点不用太长 但是要完整在 Joinly 里怎么做；谁付钱／平台赚什么
+Objectif : résumer dans le README toutes les pistes de revenus discutées, leur fonctionnement dans Joinly, le payeur et la rémunération de la plateforme, en distinguant les propositions des fonctionnalités implémentées.
