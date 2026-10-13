@@ -154,23 +154,26 @@ avec des formes humaines et des dégradés de bleu, violet, rose et orange.
 
 | Fichier | Contenu |
 | --- | --- |
-| [logo.PNG](logo.PNG) | Logo Joinly avec symbole et nom, présenté en tête de ce README. |
-| [logo1.PNG](logo1.PNG) | Planche de variantes et exemples d'utilisation de l'identité visuelle. |
-| [logo2.PNG](logo2.PNG) | Symbole graphique seul. |
+| [logo.PNG](joinly_front/logo.PNG) | Logo Joinly avec symbole et nom, présenté en tête de ce README. |
+| [logo1.PNG](joinly_front/logo1.PNG) | Planche de variantes et exemples d'utilisation de l'identité visuelle. |
+| [logo2.PNG](joinly_front/logo2.PNG) | Symbole graphique seul. |
 
 ## Contenu du dépôt
 
 ```text
 G1Dlab_joinly/
 ├── README.md
-├── index.html
-├── activites.html
-├── a-propos.html
-├── style.css
-├── prompts.txt
-├── logo.PNG
-├── logo1.PNG
-└── logo2.PNG
+├── index.html              # Redirection vers le frontend
+└── joinly_front/
+    ├── index.html          # Page d'accueil
+    ├── activites.html
+    ├── a-propos.html
+    ├── style.css
+    ├── style.js
+    ├── prompts.txt
+    ├── logo.PNG
+    ├── logo1.PNG
+    └── logo2.PNG
 ```
 
 ## Récupérer le projet
@@ -180,10 +183,23 @@ git clone https://github.com/wabo822/G1Dlab_joinly.git
 cd G1Dlab_joinly
 ```
 
-Pour voir le site, ouvrir `index.html` dans un navigateur (un double-clic suffit).
+Pour voir le site, ouvrir `index.html` dans un navigateur (un double-clic suffit) :
+cette page redirige vers `joinly_front/index.html`. Un lien permet aussi d'y accéder
+si la redirection automatique est désactivée.
 Aucune installation n'est nécessaire : les trois pages utilisent uniquement
 HTML et CSS. Les activités sont des exemples fictifs ; les comptes et les
 réservations ne sont pas encore disponibles.
+
+## Déploiement sur Hangar
+
+Dans la configuration actuelle, Hangar sert la racine du dépôt depuis
+`/var/www/html`. Le fichier `index.html` à la racine permet donc d'ouvrir le site
+à son adresse principale, tout en conservant les pages et leurs ressources dans
+`joinly_front/`. Il doit être conservé si cette configuration ne change pas.
+
+Après avoir poussé une modification sur GitHub, reconstruire le projet depuis
+le tableau de bord Hangar pour publier la nouvelle version si aucune
+reconstruction automatique n'est configurée.
 
 ## Prochaines étapes
 
