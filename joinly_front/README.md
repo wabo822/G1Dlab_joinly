@@ -40,6 +40,32 @@ elles ne sont pas encore implémentées dans ce dépôt.
 | Organisation | Création et modification d'événements, gestion des capacités et des participants. |
 | Interface | Page d'accueil ; adaptation responsive aux écrans d'ordinateur et de mobile selon l'avancement. |
 
+## Modèle économique envisagé
+
+Les pistes suivantes restent à valider avec le tuteur et le client ; elles ne
+sont pas encore implémentées. Les tarifs et commissions restent à définir.
+
+| Source de revenus | Mise en œuvre dans Joinly | Qui paie / ce que gagne Joinly |
+| --- | --- | --- |
+| Commission sur les réservations | Prélever une commission sur chaque réservation d'activité payante. | L'organisateur reverse une part du prix de la réservation à Joinly. |
+| Location de matériel | Proposer à la réservation des chaussures ou bâtons de randonnée, raquettes ou tentes, selon les tailles et stocks disponibles. | Le participant paie le fournisseur ; Joinly reçoit une commission sur la location. |
+| Services supplémentaires | Ajouter un panier-repas, un transport vers le lieu de rendez-vous ou des photos retouchées. | Le participant paie le prestataire ; Joinly reçoit une commission sur ces options. |
+| Encadrement professionnel | Réserver un guide de randonnée, un coach d'escalade ou un mentor en photographie. | Le participant paie le professionnel ; Joinly reçoit une commission sur la prestation. |
+| Formules d'activité | Proposer plusieurs formules : atelier seul, atelier avec matériel, ou expérience complète avec repas. | Le participant paie l'organisateur ; Joinly reçoit une commission sur la formule réservée. |
+| Abonnement membre — Joinly Plus | Offrir des réductions sur certaines activités, des bons de location et un accès anticipé à certaines inscriptions. | Le membre paie un abonnement ; Joinly perçoit la cotisation, avec des avantages convenus avec les partenaires. |
+| Abonnement organisateur Pro | Donner accès à davantage de publications, aux statistiques, au suivi des présences et à l'export des participants. | L'organisateur paie un abonnement ; Joinly perçoit la cotisation. |
+| Sponsoring et publicité | Afficher des espaces publicitaires ou des activités sponsorisées clairement identifiés. | Une marque, un commerçant ou un organisateur paie Joinly pour la visibilité. |
+| Offre entreprise / team building | Organiser des activités de groupe selon le budget, la date et le nombre de salariés. | L'entreprise paie les activités et des frais de coordination ; ces frais rémunèrent Joinly. |
+| Affiliation | Recommander des équipements ou activités partenaires via des liens suivis. | Le partenaire verse une commission à Joinly lorsqu'un achat ou une réservation est attribué au lien. |
+| Activités organisées par Joinly | Créer des soirées de rencontre, sorties urbaines ou sessions de jeux de société. | Les participants paient Joinly ; le revenu restant après les coûts d'organisation constitue sa marge. |
+| Services ponctuels aux organisateurs | Proposer la configuration d'une page d'inscription, un service de photographie ou la gestion de l'accueil et du pointage sur place. | L'organisateur paie à la prestation ; Joinly conserve le montant restant après les coûts de réalisation. |
+
+La location, les options, l'encadrement et les formules sont différentes offres
+auxquelles peut s'appliquer la commission, sans cumuler automatiquement plusieurs
+commissions sur une même vente. La navigation, la recherche et l'inscription aux
+activités gratuites resteraient gratuites. La commission sur les réservations
+constitue la piste principale ; les autres offres seraient ajoutées progressivement.
+
 ## Exigences fonctionnelles et priorités
 
 Les exigences suivantes reprennent les consignes fournies pour le projet.
@@ -47,15 +73,58 @@ Elles complètent les fonctionnalités propres à Joinly présentées ci-dessus.
 Le niveau de priorité détermine ce qui doit être réalisé et ce qui pourra être
 ajouté selon l'avancement du groupe.
 
-| Priorité | Niveau d'exigence | Fonctionnalités demandées |
-| --- | --- | --- |
-| **Haute** | **Toutes les fonctionnalités doivent être réalisées.** | Page d'accueil ; inscription avec différents rôles utilisateurs ; connexion ; modification des informations personnelles ; FAQ ; conditions générales d'utilisation (CGU) ; mentions légales ; recherche par mots-clés ; page de contact. Le back-office doit permettre de gérer les utilisateurs et leurs permissions, la FAQ, les CGU et les mentions légales. |
-| **Moyenne** | À réaliser selon l'avancement. | Réinitialisation du mot de passe ; recherche multicritère ; pages responsive adaptées notamment aux écrans de téléphone. |
-| **Basse** | Extensions à envisager selon l'avancement. | Messagerie interne ; forum ; accessibilité ; prise en charge de plusieurs langues, ainsi que les fonctions de back-office associées. |
+La liste détaillée ci-dessous reprend les 22 fonctionnalités du tableau fourni.
+Il s'agit d'exigences à développer, et non d'une liste de fonctionnalités déjà
+implémentées.
+
+| Liste des fonctionnalités | Priorité |
+| --- | --- |
+| Page d'accueil | **Élevée** |
+| Inscription : création de compte avec différents profils | **Élevée** |
+| Authentification | **Élevée** |
+| Édition du profil | **Élevée** |
+| FAQ | **Élevée** |
+| CGU (conditions générales d'utilisation) et mentions légales | **Élevée** |
+| Recherche simple par mot-clé | **Élevée** |
+| Back-office : gestion des utilisateurs et des droits d'accès | **Élevée** |
+| Back-office : gestion de la FAQ | **Élevée** |
+| Back-office : gestion des CGU | **Élevée** |
+| Back-office : gestion des mentions légales | **Élevée** |
+| Contact | **Élevée** |
+| Mot de passe oublié | **Moyenne** |
+| Recherche avancée multicritère | **Moyenne** |
+| Site responsive : adaptation à l'écran | **Moyenne** |
+| Messagerie interne | **Faible** |
+| Forum | **Faible** |
+| Site accessible : adaptation aux handicaps | **Faible** |
+| Site multilingue (voir la remarque ci-dessous) | **Faible** |
+| Back-office : gestion du forum | **Faible** |
+| Back-office : gestion de la messagerie interne | **Faible** |
+| Back-office : gestion des aspects liés au rendu visuel | **Faible** |
+
+**Remarque sur le document source :** la ligne du site multilingue indique
+« Site multilangues (s'adapte aux handicaps) ». La parenthèse semble reprendre
+par erreur celle de l'accessibilité ; sa signification est à confirmer avec le
+tuteur et le client.
 
 Les rôles utilisateurs et leurs permissions seront précisés lors de la
 conception. Les exigences de priorité haute constituent le socle obligatoire ;
 les niveaux moyen et bas restent conditionnés par l'avancement du projet.
+
+### Fonctionnalités supplémentaires propres au projet
+
+Les autres fonctionnalités liées à Joinly doivent être **validées par le tuteur
+et le client**, en définissant leurs priorités. Le tableau source laisse leur
+priorité à déterminer (« ? »).
+
+Le document donne les exemples suivants : ajouter, modifier, afficher et
+supprimer un ou plusieurs éléments du site (logement, œuvre d'art, animal,
+événement, participant, locataire, tâche, etc.), proposer une carte interactive,
+un chat ou un chatbot.
+
+Pour Joinly, la gestion des activités, des événements, des participants et des
+réservations présentée plus haut devra donc être validée avec ses priorités.
+Les autres exemples ne deviennent pas automatiquement des exigences du projet.
 
 ## Parcours utilisateur envisagé
 
