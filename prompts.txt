@@ -2,3 +2,7 @@
 Demande : 帮我最简单的做一个简单的网页超级简单 要有那些 html 文件，再 git 一下
 Objectif : créer un site très simple avec des fichiers HTML, puis le versionner avec Git.
 Résultat : index.html, activites.html, a-propos.html et style.css ; documentation mise à jour.
+
+2026-10-13 — Exigences fonctionnelles détaillées
+Demande : 先把这个翻译，再把这个要求加进去 加到 readme
+Objectif : traduire le tableau fourni, puis reprendre ses 22 fonctionnalités et leurs priorités dans le README, avec la validation des fonctionnalités supplémentaires par le tuteur et le client.
