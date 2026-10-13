@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.PNG" alt="Logo Joinly" width="640" />
+  <img src="./joinly_front/logo.PNG" alt="Logo Joinly" width="640" />
 </p>
 
 # Joinly — par G1D Lab
