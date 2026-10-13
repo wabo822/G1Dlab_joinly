@@ -1,0 +1,4 @@
+2026-10-13 — Première version statique de Joinly
+Demande : 帮我最简单的做一个简单的网页超级简单 要有那些 html 文件，再 git 一下
+Objectif : créer un site très simple avec des fichiers HTML, puis le versionner avec Git.
+Résultat : index.html, activites.html, a-propos.html et style.css ; documentation mise à jour.

@@ -16,8 +16,8 @@ ateliers ou activités sportives et culturelles.
 
 ## État du projet
 
-Le projet est en phase de conception. Ce dépôt contient actuellement la
-présentation du projet et les premiers éléments de son identité visuelle.
+Le projet est en phase de conception. Ce dépôt contient une première version
+statique du site : accueil, exemples d'activités et présentation du projet.
 Les fonctionnalités décrites ci-dessous constituent le périmètre envisagé ;
 elles ne sont pas encore implémentées dans ce dépôt.
 
@@ -94,6 +94,11 @@ avec des formes humaines et des dégradés de bleu, violet, rose et orange.
 ```text
 G1Dlab_joinly/
 ├── README.md
+├── index.html
+├── activites.html
+├── a-propos.html
+├── style.css
+├── prompts.txt
 ├── logo.PNG
 ├── logo1.PNG
 └── logo2.PNG
@@ -106,9 +111,10 @@ git clone https://github.com/wabo822/G1Dlab_joinly.git
 cd G1Dlab_joinly
 ```
 
-Aucune application exécutable n'est encore présente. Les prérequis, variables
-d'environnement, commandes d'installation, de lancement et de test seront
-documentés ici avec l'ajout du code.
+Pour voir le site, ouvrir `index.html` dans un navigateur (un double-clic suffit).
+Aucune installation n'est nécessaire : les trois pages utilisent uniquement
+HTML et CSS. Les activités sont des exemples fictifs ; les comptes et les
+réservations ne sont pas encore disponibles.
 
 ## Prochaines étapes
 
