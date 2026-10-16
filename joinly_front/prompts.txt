@@ -10,3 +10,7 @@ Objectif : traduire le tableau fourni, puis reprendre ses 22 fonctionnalités et
 2026-10-13 — Modèle économique envisagé
 Demande : 我觉得你可以把所有的赚钱方式都加进 readme，简单一点不用太长 但是要完整在 Joinly 里怎么做；谁付钱／平台赚什么
 Objectif : résumer dans le README toutes les pistes de revenus discutées, leur fonctionnement dans Joinly, le payeur et la rémunération de la plateforme, en distinguant les propositions des fonctionnalités implémentées.
+
+2026-10-13 — Entrée du site sur Hangar
+Demande : 可以啊 你先在本地把新的拉下来 你更新后再推上去
+Objectif : récupérer la dernière version, ajouter une page de redirection à la racine vers joinly_front/index.html pour corriger l'accès à l'adresse principale sur Hangar, puis vérifier, versionner et pousser la modification.
