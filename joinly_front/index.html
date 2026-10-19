@@ -1,40 +1,14 @@
-<!--<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Joinly — Accueil</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header>
-    <a class="brand" href="index.html">Joinly</a>
-    <nav aria-label="Navigation principale">
-      <a href="index.html" aria-current="page">Accueil</a>
-      <a href="activites.html">Activités</a>
-      <a href="a-propos.html">À propos</a>
-    </nav>
-  </header>
-  <main>
-    <img class="logo" src="logo.PNG" alt="Logo Joinly">
-    <h1>Des activités, des rencontres.</h1>
-    <p>Découvrez Joinly, un projet pour partager des activités et rencontrer de nouvelles personnes.</p>
-    <a class="button" href="activites.html">Voir les activités</a>
-  </main>
-  <footer>Joinly · G1D Lab</footer>
-</body>
-</html>
--->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Joinly | Find people to do things with</title>
-  <meta name="description" content="Runs, pottery nights, language swaps, five-a-side. People nearby post what they're up to on Joinly, and you can join in.">
+  <meta name="description" content="A football match on Sunday, the new restaurant around the corner, a walk in the park. Find things to do nearby and people to do them with.">
+  <link rel="icon" type="image/png" href="images/joinly-mark.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -65,14 +39,14 @@
   <header class="site-header">
     <nav class="nav container" aria-label="Main">
       <a class="logo" href="index.html" aria-label="Joinly home">
-        <img class="logo__mark" src="logo2.PNG" width="48" height="48" alt="">
-        <span class="logo__word">Joinly</span>
+        <img src="images/joinly-logo.png" alt="Joinly" width="131" height="40">
       </a>
 
       <ul class="nav__links">
         <li><a href="explore.html">Explore</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="host.html">Host an activity</a></li>
+        <li><a href="#business">For businesses</a></li>
       </ul>
 
       <div class="nav__actions">
@@ -89,7 +63,7 @@
       <div class="hero__inner container">
         <div class="hero__text">
           <h1 class="hero__title">Find people to do things with.</h1>
-          <p class="hero__lead">Runs, pottery nights, language swaps, five-a-side. People nearby post what they're up to, and you can join in, meet the group and keep the friends you make.</p>
+          <p class="hero__lead">A football match on Sunday, the new restaurant around the corner, a walk in the park. Find things to do nearby, people to do them with, and keep the friends you make.</p>
           <div class="hero__ctas">
             <a class="btn btn--primary btn--lg" href="explore.html">Explore activities</a>
             <a class="btn btn--outline btn--lg" href="host.html">Host an activity</a>
@@ -97,8 +71,10 @@
         </div>
 
         <div class="collage" role="img" aria-label="Three example activity invites: a sunrise run, a board game night and a pottery class">
-          <span class="collage__sun" aria-hidden="true"></span>
-          <span class="collage__dot" aria-hidden="true"></span>
+          <!-- Les trois formes rappellent les trois personnages du logo -->
+          <span class="collage__shape collage__shape--coral" aria-hidden="true"></span>
+          <span class="collage__shape collage__shape--purple" aria-hidden="true"></span>
+          <span class="collage__shape collage__shape--blue" aria-hidden="true"></span>
 
           <div class="invite invite--one">
             <div class="invite__head">
@@ -112,7 +88,7 @@
               <span class="going">
                 <span class="avatars">
                   <span class="avatar avatar--blue">MA</span>
-                  <span class="avatar avatar--sun">JO</span>
+                  <span class="avatar avatar--coral">JO</span>
                   <span class="avatar avatar--navy">LE</span>
                 </span>
                 8 going
@@ -123,7 +99,7 @@
 
           <div class="invite invite--two">
             <div class="invite__head">
-              <span class="invite__date invite__date--sun"><span>Fri</span><strong>16</strong></span>
+              <span class="invite__date invite__date--coral"><span>Fri</span><strong>16</strong></span>
               <div>
                 <p class="invite__title">Board games and bao</p>
                 <p class="invite__where">19:00, The Long Table café</p>
@@ -132,18 +108,18 @@
             <div class="invite__foot">
               <span class="going">
                 <span class="avatars">
-                  <span class="avatar avatar--lilac">SA</span>
+                  <span class="avatar avatar--purple">SA</span>
                   <span class="avatar avatar--blue">TK</span>
                 </span>
                 5 going
               </span>
-              <span class="pill pill--sun">1 spot left</span>
+              <span class="pill pill--coral">1 spot left</span>
             </div>
           </div>
 
           <div class="invite invite--three">
             <div class="invite__head">
-              <span class="invite__date invite__date--navy"><span>Sun</span><strong>18</strong></span>
+              <span class="invite__date invite__date--purple"><span>Sun</span><strong>18</strong></span>
               <div>
                 <p class="invite__title">Beginner wheel pottery</p>
                 <p class="invite__where">14:00, Clay Corner studio</p>
@@ -188,14 +164,14 @@
         <a class="section__link" href="explore.html">Browse all categories</a>
       </div>
       <ul class="categories">
-        <li><a class="category" href="explore.html?cat=sports"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-sports"/></svg></span>Sports</a></li>
-        <li><a class="category" href="explore.html?cat=outdoors"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-outdoors"/></svg></span>Outdoors</a></li>
-        <li><a class="category" href="explore.html?cat=food"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-food"/></svg></span>Food and drink</a></li>
-        <li><a class="category" href="explore.html?cat=arts"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-arts"/></svg></span>Arts and making</a></li>
-        <li><a class="category" href="explore.html?cat=games"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-games"/></svg></span>Games</a></li>
-        <li><a class="category" href="explore.html?cat=music"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-music"/></svg></span>Music</a></li>
-        <li><a class="category" href="explore.html?cat=languages"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-languages"/></svg></span>Languages</a></li>
-        <li><a class="category" href="explore.html?cat=wellness"><span class="category__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-wellness"/></svg></span>Wellness</a></li>
+        <li><a class="category" href="explore.html?cat=sports"><span class="category__icon category__icon--blue"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-sports"/></svg></span>Sports</a></li>
+        <li><a class="category" href="explore.html?cat=outdoors"><span class="category__icon category__icon--purple"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-outdoors"/></svg></span>Outdoors</a></li>
+        <li><a class="category" href="explore.html?cat=food"><span class="category__icon category__icon--coral"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-food"/></svg></span>Food and drink</a></li>
+        <li><a class="category" href="explore.html?cat=arts"><span class="category__icon category__icon--blue"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-arts"/></svg></span>Arts and making</a></li>
+        <li><a class="category" href="explore.html?cat=games"><span class="category__icon category__icon--purple"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-games"/></svg></span>Games</a></li>
+        <li><a class="category" href="explore.html?cat=music"><span class="category__icon category__icon--coral"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-music"/></svg></span>Music</a></li>
+        <li><a class="category" href="explore.html?cat=languages"><span class="category__icon category__icon--blue"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-languages"/></svg></span>Languages</a></li>
+        <li><a class="category" href="explore.html?cat=wellness"><span class="category__icon category__icon--purple"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-wellness"/></svg></span>Wellness</a></li>
       </ul>
     </section>
 
@@ -225,17 +201,17 @@
             </ul>
             <div class="card__foot">
               <span class="going">
-                <span class="avatars"><span class="avatar avatar--blue">MA</span><span class="avatar avatar--sun">JO</span><span class="avatar avatar--navy">LE</span></span>
+                <span class="avatars"><span class="avatar avatar--blue">MA</span><span class="avatar avatar--coral">JO</span><span class="avatar avatar--navy">LE</span></span>
                 8 going
               </span>
-              <span class="pill pill--sun">4 spots left</span>
+              <span class="pill pill--coral">4 spots left</span>
             </div>
           </a>
         </li>
 
         <li>
           <a class="card" href="activity.html">
-            <div class="card__media media--sun">
+            <div class="card__media media--coral">
               <span class="date-chip"><span>Fri</span><strong>16</strong></span>
               <span class="media-label">Photo: a table of board games</span>
             </div>
@@ -247,10 +223,10 @@
             </ul>
             <div class="card__foot">
               <span class="going">
-                <span class="avatars"><span class="avatar avatar--lilac">SA</span><span class="avatar avatar--blue">TK</span><span class="avatar avatar--sun">NI</span></span>
+                <span class="avatars"><span class="avatar avatar--purple">SA</span><span class="avatar avatar--blue">TK</span><span class="avatar avatar--coral">NI</span></span>
                 5 going
               </span>
-              <span class="pill pill--sun">1 spot left</span>
+              <span class="pill pill--coral">1 spot left</span>
             </div>
           </a>
         </li>
@@ -269,17 +245,17 @@
             </ul>
             <div class="card__foot">
               <span class="going">
-                <span class="avatars"><span class="avatar avatar--navy">IR</span><span class="avatar avatar--lilac">BE</span><span class="avatar avatar--sun">CA</span></span>
+                <span class="avatars"><span class="avatar avatar--navy">IR</span><span class="avatar avatar--purple">BE</span><span class="avatar avatar--coral">CA</span></span>
                 4 going
               </span>
-              <span class="pill pill--sun">2 spots left</span>
+              <span class="pill pill--coral">2 spots left</span>
             </div>
           </a>
         </li>
 
         <li>
           <a class="card" href="activity.html">
-            <div class="card__media media--sun">
+            <div class="card__media media--coral">
               <span class="date-chip"><span>Thu</span><strong>15</strong></span>
               <span class="media-label">Photo: people chatting over coffee</span>
             </div>
@@ -291,10 +267,10 @@
             </ul>
             <div class="card__foot">
               <span class="going">
-                <span class="avatars"><span class="avatar avatar--sun">LU</span><span class="avatar avatar--blue">DA</span><span class="avatar avatar--navy">EM</span></span>
+                <span class="avatars"><span class="avatar avatar--coral">LU</span><span class="avatar avatar--blue">DA</span><span class="avatar avatar--navy">EM</span></span>
                 11 going
               </span>
-              <span class="pill pill--sun">9 spots left</span>
+              <span class="pill pill--coral">9 spots left</span>
             </div>
           </a>
         </li>
@@ -303,20 +279,20 @@
           <a class="card" href="activity.html">
             <div class="card__media media--grey">
               <span class="date-chip"><span>Sat</span><strong>17</strong></span>
-              <span class="media-label">Photo: market stalls with produce</span>
+              <span class="media-label">Photo: steaming bowls of ramen</span>
             </div>
-            <div class="card__meta"><span class="card__cat">Food and drink</span><span>Split ingredients</span></div>
-            <h3 class="card__title">Market morning and cook-along</h3>
+            <div class="card__meta"><span class="card__cat">Food and drink</span><span class="card__partner">Partner venue</span></div>
+            <h3 class="card__title">Opening night at Noodle Lab</h3>
             <ul class="card__info">
-              <li><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Sat 17 Oct, 10:00</li>
-              <li><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>Central market, north entrance</li>
+              <li><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Sat 17 Oct, 19:30</li>
+              <li><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>Noodle Lab ramen bar</li>
             </ul>
             <div class="card__foot">
               <span class="going">
-                <span class="avatars"><span class="avatar avatar--lilac">RO</span><span class="avatar avatar--navy">AY</span><span class="avatar avatar--blue">FE</span></span>
+                <span class="avatars"><span class="avatar avatar--purple">RO</span><span class="avatar avatar--navy">AY</span><span class="avatar avatar--blue">FE</span></span>
                 6 going
               </span>
-              <span class="pill pill--sun">2 spots left</span>
+              <span class="pill pill--coral">2 spots left</span>
             </div>
           </a>
         </li>
@@ -325,20 +301,20 @@
           <a class="card" href="activity.html">
             <div class="card__media media--blue">
               <span class="date-chip"><span>Sun</span><strong>18</strong></span>
-              <span class="media-label">Photo: sketchbooks at sunset</span>
+              <span class="media-label">Photo: fans watching the match</span>
             </div>
-            <div class="card__meta"><span class="card__cat">Outdoors</span><span>Free</span></div>
-            <h3 class="card__title">Sunset sketching on the hill</h3>
+            <div class="card__meta"><span class="card__cat">Sports</span><span>Free entry</span></div>
+            <h3 class="card__title">Watch the derby together</h3>
             <ul class="card__info">
               <li><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Sun 18 Oct, 17:30</li>
-              <li><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>Hilltop park viewpoint</li>
+              <li><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>The Corner sports bar</li>
             </ul>
             <div class="card__foot">
               <span class="going">
-                <span class="avatars"><span class="avatar avatar--blue">PA</span><span class="avatar avatar--sun">GI</span></span>
-                3 going
+                <span class="avatars"><span class="avatar avatar--blue">PA</span><span class="avatar avatar--coral">GI</span><span class="avatar avatar--purple">KE</span></span>
+                9 going
               </span>
-              <span class="pill pill--sun">7 spots left</span>
+              <span class="pill pill--coral">3 spots left</span>
             </div>
           </a>
         </li>
@@ -375,7 +351,7 @@
         <div class="host__text">
           <h2 class="host__title">Already doing something? Open it up.</h2>
           <p class="host__lead">Post your weekly run, your book club or a one-off museum trip. You choose the group size, who gets in and whether there's a cost to split.</p>
-          <a class="btn btn--sun btn--lg" href="host.html">Post an activity</a>
+          <a class="btn btn--coral btn--lg" href="host.html">Post an activity</a>
         </div>
         <ul class="host__perks">
           <li class="perk">
@@ -394,6 +370,49 @@
       </div>
     </section>
 
+    <!-- ============ COMMERCES LOCAUX ============ -->
+    <section id="business" class="business" aria-labelledby="biz-title">
+      <div class="business__inner container">
+        <div class="business__text">
+          <span class="tag tag--purple">For local businesses</span>
+          <h2 id="biz-title" class="business__title">Run a café, club or venue? Get found by people looking for plans.</h2>
+          <p class="business__lead">Joinly connects you with people who already want what you offer. Show off your place, post events and offers, and welcome whole groups through the door.</p>
+          <ul class="business__list">
+            <li><svg class="icon icon--tick" aria-hidden="true"><use href="#i-check"/></svg>Showcase your venue with photos, opening hours and what makes it special.</li>
+            <li><svg class="icon icon--tick" aria-hidden="true"><use href="#i-check"/></svg>Promote events and offers to people whose interests match.</li>
+            <li><svg class="icon icon--tick" aria-hidden="true"><use href="#i-check"/></svg>Host activities that bring in groups, not just walk-ins.</li>
+          </ul>
+          <div class="business__ctas">
+            <a class="btn btn--purple btn--lg" href="business.html">Joinly for business</a>
+            <a class="btn btn--outline btn--lg" href="contact.html">Talk to our team</a>
+          </div>
+        </div>
+
+        <div class="business__visual">
+          <article class="venue" aria-label="Example venue on Joinly">
+            <div class="venue__media media--coral">
+              <span class="venue__badge">Partner venue</span>
+              <span class="media-label">Photo: the ramen counter</span>
+            </div>
+            <div class="venue__body">
+              <h3 class="venue__name">Noodle Lab</h3>
+              <p class="venue__type">Ramen bar, opened this month</p>
+            </div>
+            <div class="venue__offer">
+              <strong>Opening week offer</strong>
+              <span>15% off for Joinly groups of 4 or more</span>
+            </div>
+            <div class="venue__events">
+              <p class="venue__events-title">Happening here this week</p>
+              <div class="venue__event"><span>Opening night ramen crawl</span><span>Sat 19:30, 6 going</span></div>
+              <div class="venue__event"><span>Gyoza folding workshop</span><span>Sun 12:00, 4 going</span></div>
+            </div>
+            <a class="btn btn--primary venue__cta" href="venue.html">View venue</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ SÉCURITÉ ============ -->
     <section class="section container">
       <h2 class="section__title section__title--narrow">Meeting new people, with a safety net</h2>
@@ -401,7 +420,7 @@
         <li class="safety__item">
           <span class="safety__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-shield"/></svg></span>
           <h3>Verified profiles</h3>
-          <p>Members confirm their phone number and a photo before joining their first activity.</p>
+          <p>Members confirm their email, can add a phone number, and can verify their ID for a verified badge.</p>
         </li>
         <li class="safety__item">
           <span class="safety__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-chat"/></svg></span>
@@ -427,12 +446,8 @@
     <div class="container">
       <div class="footer__top">
         <div class="footer__brand">
-          <a class="logo logo--light" href="index.html" aria-label="Joinly home">
-            <svg class="logo__mark" width="36" height="24" viewBox="0 0 36 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="11" fill="#2B3FE0"/>
-              <circle cx="24" cy="12" r="11" fill="#FFB938" style="mix-blend-mode: screen"/>
-            </svg>
-            <span class="logo__word">Joinly</span>
+          <a class="logo" href="index.html" aria-label="Joinly home">
+            <img src="images/joinly-logo-light.png" alt="Joinly" width="144" height="44">
           </a>
           <p>Find people to do things with.</p>
         </div>
@@ -451,6 +466,14 @@
               <li><a href="explore.html">Explore activities</a></li>
               <li><a href="host.html">Host an activity</a></li>
               <li><a href="#">Community guidelines</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Businesses</h3>
+            <ul>
+              <li><a href="business.html">Joinly for business</a></li>
+              <li><a href="#">Partner venues</a></li>
+              <li><a href="contact.html">Talk to our team</a></li>
             </ul>
           </div>
           <div>
