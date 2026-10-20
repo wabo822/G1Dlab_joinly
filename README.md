@@ -39,6 +39,52 @@ elles ne sont pas encore implémentées dans ce dépôt.
 | Réservations | Inscription à une activité, annulation et consultation de ses réservations. |
 | Organisation | Création et modification d'événements, gestion des capacités et des participants. |
 | Interface | Page d'accueil ; adaptation responsive aux écrans d'ordinateur et de mobile selon l'avancement. |
+| Assistant IA | Chatbot Joinly : recommandations selon le profil, réponses contextualisées sur le projet et questions générales. Fonction prévue, non implémentée. |
+
+### Assistant IA Joinly et recommandations personnalisées
+
+L'assistant entre dans le périmètre proposé avec une **priorité moyenne
+proposée**, à valider avec le client après le socle obligatoire et la réservation.
+Il ne correspond pas à la messagerie entre membres et n'est pas encore implémenté.
+
+- **Recommandations** : avec l'accord du membre, utiliser ses centres d'intérêt,
+  sa zone choisie et ses préférences déclarées pour suggérer jusqu'à trois
+  activités existantes, à venir et disponibles. Donner une raison et un lien
+  pour chaque proposition. Si le profil est vide, demander ses préférences.
+- **Questions sur Joinly** : répondre à partir d'une courte présentation du
+  projet, de règles et d'une FAQ validées, ajoutées directement au prompt.
+  Signaler les informations manquantes et permettre de consulter l'aide source.
+- **Questions générales** : converser avec le modèle en distinguant les réponses
+  générales des informations fournies sur Joinly. Aucun accès au Web en temps
+  réel n'est prévu pour le prototype.
+
+**Prototype : API et prompt engineering.** Le serveur composera un prompt avec
+les instructions, les extraits fixes validés, les préférences autorisées et une
+courte liste d'activités sélectionnées par des filtres simples. Le modèle
+existant génère la réponse, sans entraînement. Il n'y a ni moteur de recherche
+documentaire ni index vectoriel : cette contextualisation simplifiée n'est pas
+un véritable RAG. Une recherche documentaire automatique reste une évolution.
+Les disponibilités proviennent de la base métier et doivent être revérifiées
+lors de la réservation. Le modèle ne peut pas inventer d'activité ou de place.
+
+L'assistant propose et explique, mais ne réserve, n'annule ni ne modifie le
+profil. L'utilisateur agit dans les écrans habituels. Le profil d'autrui reste
+inaccessible. L'utilisation de son profil est facultative et désactivable.
+Pour la démonstration via API, utiliser des profils fictifs et une documentation
+publique validée. Les clés API et les appels restent côté serveur, avec quotas,
+délai maximal et message de repli en cas de panne.
+
+**Cible d'exploitation : modèle local.** Remplacer l'API externe par un modèle
+à poids ouverts hébergé sur une infrastructure contrôlée par le projet afin de
+réduire les transmissions à des tiers. « Local » désigne cette infrastructure,
+pas nécessairement l'ordinateur du visiteur. La licence, le matériel, la mémoire,
+la qualité et les temps de réponse restent à valider. Le déploiement local ne
+remplace pas les contrôles d'accès, de réseau, des journaux et des sauvegardes.
+Aucun repli silencieux vers une API externe n'est prévu en exploitation locale.
+
+Les exigences J08 à J12 et les scénarios R15 à R20 figurent dans le
+[cahier des charges](docs/cahier-des-charges-joinly.md). Le modèle, les quotas,
+le budget et les règles de conservation restent à définir.
 
 ## Modèle économique envisagé
 
@@ -126,6 +172,10 @@ Pour Joinly, la gestion des activités, des événements, des participants et de
 réservations présentée plus haut devra donc être validée avec ses priorités.
 Les autres exemples ne deviennent pas automatiquement des exigences du projet.
 
+L'assistant IA décrit plus haut constitue une demande propre à Joinly,
+avec une priorité moyenne proposée. Il s'ajoute aux exigences pédagogiques
+sans modifier leurs priorités.
+
 ## Parcours utilisateur envisagé
 
 1. Découvrir les activités proposées.
@@ -142,6 +192,11 @@ Le projet sera organisé autour de trois composants :
 - **Frontend** : interface de découverte, de réservation et de gestion des activités.
 - **Backend / API** : authentification, règles de réservation et gestion des événements.
 - **Base de données** : stockage des utilisateurs, des activités et des réservations.
+
+Le backend intégrera un service d'assistance IA par API avec contexte fixe
+et recommandations. Un adaptateur permettra ensuite de passer au modèle local.
+Le catalogue reste la source des disponibilités et les permissions s'appliquent
+avant tout accès au profil.
 
 Les technologies, la structure du code et les modalités de déploiement seront
 précisées lorsque les choix techniques du groupe auront été validés.
@@ -211,6 +266,8 @@ reconstruction automatique n'est configurée.
 - [ ] Réaliser toutes les exigences de priorité haute, y compris le back-office.
 - [ ] Développer la découverte d'activités et la gestion des événements.
 - [ ] Implémenter l'authentification et les réservations.
+- [ ] Intégrer le chatbot par API, ses prompts contextualisés et les recommandations.
+- [ ] Valider les réponses, les droits d'accès, les quotas et la cible de modèle local.
 - [ ] Ajouter les fonctionnalités de priorité moyenne selon l'avancement.
 - [ ] Étudier les extensions de priorité basse selon l'avancement.
 - [ ] Tester les parcours, notamment les capacités et les annulations.
