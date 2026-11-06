@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Découvrez des activités près de chez vous et rencontrez de nouvelles personnes avec Joinly.">
+<title>
+{% block title %}Joinly — Faites des choses ensemble{% endblock %}
+</title>
+<link rel="stylesheet" href="{{ url_for('static',filename='app.css') }}">
+</head>
+<body>
+<a class="skip" href="#main">Aller au contenu</a>
+<header>
+<nav class="container nav" aria-label="Navigation principale">
+<a href="{{ url_for('home') }}" class="brand">
+<img src="{{ url_for('static',filename='logo.png') }}" width="131" height="40" alt="Joinly — Accueil">
+</a>
+<div class="navlinks">
+<a href="{{ url_for('activities') }}">Explorer</a>
+<a href="{{ url_for('faq') }}">Comment ça marche</a>
+{% if 'organizer' in g.roles %}
+<a href="{{ url_for('organizer') }}">Organiser</a>
+{% endif %}
+{% if 'admin' in g.roles %}
+<a href="{{ url_for('admin') }}">Administration</a>
+{% endif %}
+</div>
+<div class="actions">
+{% if g.user %}
+<a class="button secondary small" href="{{ url_for('account') }}">Mon espace</a>
+<form method="post" action="{{ url_for('logout') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="textbutton">Déconnexion</button>
+</form>
+{% else %}
+<a href="{{ url_for('login') }}">Connexion</a>
+<a class="button small" href="{{ url_for('signup') }}">S’inscrire</a>
+{% endif %}
+</div>
+</nav>
+</header>
+<main id="main">
+{% with messages=get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="container notifications" role="status">
+{% for category,message in messages %}
+<p class="notice {{ category }}">{{ message }}</p>
+{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+{% block content %}
+{% endblock %}
+</main>
+<footer>
+<div class="container footer">
+<div>
+<strong>Joinly · G1D Lab</strong>
+<p>Des activités. Des rencontres. Des liens.</p>
+</div>
+<nav aria-label="Informations">
+<a href="{{ url_for('faq') }}">FAQ</a>
+<a href="{{ url_for('contact') }}">Contact</a>
+<a href="{{ url_for('legal',kind='terms') }}">CGU</a>
+<a href="{{ url_for('legal',kind='legal_notice') }}">Mentions légales</a>
+</nav>
+</div>
+</footer>
+</body>
+</html>

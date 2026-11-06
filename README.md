@@ -16,10 +16,22 @@ ateliers ou activités sportives et culturelles.
 
 ## État du projet
 
-Le projet est en phase de conception. Ce dépôt contient une première version
-statique du site : accueil, exemples d'activités et présentation du projet.
-Les fonctionnalités décrites ci-dessous constituent le périmètre envisagé ;
-elles ne sont pas encore implémentées dans ce dépôt.
+Une première version fonctionnelle est disponible : backend **Flask**, pages
+HTML rendues côté serveur et base **PostgreSQL 16**. Elle couvre le socle de
+priorité élevée et le parcours des activités gratuites : comptes, profils,
+recherche, inscriptions, espace organisateur, administration, FAQ, pages légales
+et contact. Les pages adaptatives et les filtres avancés sont également livrés.
+
+Les instructions de lancement, de test et d’exploitation sont dans
+[docs/developpement.md](docs/developpement.md). La matrice des fonctionnalités
+et leurs limites figurent dans [docs/recette-v1.md](docs/recette-v1.md).
+Le dossier `joinly_front/` conserve la maquette d’origine ; l’application utilise
+`app/templates/` et `app/static/`.
+
+Le chatbot, les fonctions sociales et le paiement restent des évolutions.
+La récupération du mot de passe nécessite un serveur SMTP configuré. Les textes
+légaux initiaux sont identifiés comme documents de démonstration à compléter
+avant une ouverture au public.
 
 ## Objectifs
 
@@ -29,7 +41,7 @@ elles ne sont pas encore implémentées dans ce dépôt.
 - Adapter progressivement l'interface aux écrans d'ordinateur et de mobile, selon les priorités ci-dessous.
 - Réaliser une application complète reliant interface web, serveur et base de données.
 
-## Fonctionnalités prévues
+## Fonctionnalités du projet
 
 | Domaine | Fonctionnalités envisagées |
 | --- | --- |
@@ -120,8 +132,8 @@ Le niveau de priorité détermine ce qui doit être réalisé et ce qui pourra �
 ajouté selon l'avancement du groupe.
 
 La liste détaillée ci-dessous reprend les 22 fonctionnalités du tableau fourni.
-Il s'agit d'exigences à développer, et non d'une liste de fonctionnalités déjà
-implémentées.
+Le tableau exprime les priorités du projet. La matrice de recette distingue les
+fonctionnalités livrées des extensions.
 
 | Liste des fonctionnalités | Priorité |
 | --- | --- |
@@ -198,8 +210,12 @@ et recommandations. Un adaptateur permettra ensuite de passer au modèle local.
 Le catalogue reste la source des disponibilités et les permissions s'appliquent
 avant tout accès au profil.
 
-Les technologies, la structure du code et les modalités de déploiement seront
-précisées lorsque les choix techniques du groupe auront été validés.
+Le moteur de base de données retenu est **PostgreSQL**. Le backend Flask se connecte à la base avec un compte applicatif limité.
+Gunicorn sert les pages et les formulaires ; les mutations sont protégées par
+un jeton CSRF et les autorisations sont vérifiées côté serveur.
+
+Les instructions d’installation, de connexion, de test et les limites du schéma
+figurent dans [database/README.md](database/README.md).
 
 ## Identité visuelle
 
@@ -217,18 +233,14 @@ avec des formes humaines et des dégradés de bleu, violet, rose et orange.
 
 ```text
 G1Dlab_joinly/
-├── README.md
-├── index.html              # Redirection vers le frontend
-└── joinly_front/
-    ├── index.html          # Page d'accueil
-    ├── activites.html
-    ├── a-propos.html
-    ├── style.css
-    ├── style.js
-    ├── prompts.txt
-    ├── logo.PNG
-    ├── logo1.PNG
-    └── logo2.PNG
+├── app/                    # Backend Flask, templates et styles de la V1
+├── database/               # Schéma et migrations PostgreSQL
+├── scripts/                # Initialisation, contenu initial et service
+├── tests/                  # Tests métier et parcours navigateur
+├── deploy/                 # Service systemd Gunicorn
+├── docs/                   # Cahier des charges et guide technique
+├── requirements.txt        # Dépendances de l’application
+└── joinly_front/            # Maquette statique historique
 ```
 
 ## Récupérer le projet
@@ -238,40 +250,42 @@ git clone https://github.com/wabo822/G1Dlab_joinly.git
 cd G1Dlab_joinly
 ```
 
-Pour voir le site, ouvrir `index.html` dans un navigateur (un double-clic suffit) :
-cette page redirige vers `joinly_front/index.html`. Un lien permet aussi d'y accéder
-si la redirection automatique est désactivée.
-Aucune installation n'est nécessaire : les trois pages utilisent uniquement
-HTML et CSS. Les activités sont des exemples fictifs ; les comptes et les
-réservations ne sont pas encore disponibles.
+Pour lancer la version complète, suivre [le guide de développement](docs/developpement.md).
+Ouvrir simplement `index.html` affiche uniquement la maquette historique : cela
+ne démarre ni le backend ni les fonctionnalités de compte et de réservation.
 
-## Déploiement sur Hangar
+## Déploiement
 
-Dans la configuration actuelle, Hangar sert la racine du dépôt depuis
-`/var/www/html`. Le fichier `index.html` à la racine permet donc d'ouvrir le site
-à son adresse principale, tout en conservant les pages et leurs ressources dans
-`joinly_front/`. Il doit être conservé si cette configuration ne change pas.
+La V1 est en ligne sur **https://isep.wangjiahan.com**. Nginx relaie HTTPS vers
+Gunicorn ; le certificat du sous-domaine et son renouvellement sont configurés.
+Le domaine principal conserve sa configuration existante.
 
-Après avoir poussé une modification sur GitHub, reconstruire le projet depuis
-le tableau de bord Hangar pour publier la nouvelle version si aucune
-reconstruction automatique n'est configurée.
+La version complète est exécutable sur cette machine avec Gunicorn et PostgreSQL.
+Un service systemd est fourni pour la maintenir active sur `127.0.0.1:8000`.
+L’accès distant de développement peut utiliser un tunnel SSH.
+
+La configuration Hangar décrite initialement sert seulement les fichiers
+statiques depuis `/var/www/html`. Elle doit être adaptée pour exécuter ou relayer
+le backend Flask ; pousser le dépôt ne suffit pas à y déployer la V1. Aucun
+déploiement Hangar ni changement de domaine n’a été effectué dans cette version.
 
 ## Prochaines étapes
 
 - [x] Ajouter les premiers visuels Joinly.
 - [x] Présenter le projet et son périmètre dans le README.
 - [ ] Valider le périmètre fonctionnel et les parcours utilisateurs.
-- [ ] Choisir les technologies du frontend, du backend et de la base de données.
+- [x] Choisir PostgreSQL et initialiser la base de développement.
+- [x] Choisir Flask, Jinja et PostgreSQL pour la première version.
 - [ ] Concevoir les maquettes et le modèle de données.
-- [ ] Réaliser toutes les exigences de priorité haute, y compris le back-office.
-- [ ] Développer la découverte d'activités et la gestion des événements.
-- [ ] Implémenter l'authentification et les réservations.
+- [x] Réaliser le socle de priorité haute et le back-office (contenus légaux à valider).
+- [x] Développer la découverte d'activités et la gestion des événements.
+- [x] Implémenter l'authentification et les réservations.
 - [ ] Intégrer le chatbot par API, ses prompts contextualisés et les recommandations.
 - [ ] Valider les réponses, les droits d'accès, les quotas et la cible de modèle local.
 - [ ] Ajouter les fonctionnalités de priorité moyenne selon l'avancement.
 - [ ] Étudier les extensions de priorité basse selon l'avancement.
-- [ ] Tester les parcours, notamment les capacités et les annulations.
-- [ ] Déployer l'application et compléter la documentation technique.
+- [x] Tester les parcours, notamment les capacités, les accès et les annulations.
+- [ ] Configurer le domaine HTTPS, SMTP et les sauvegardes de production.
 
 ## Travail en équipe
 

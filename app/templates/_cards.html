@@ -1,0 +1,33 @@
+<div class="cards">
+{% for event in events %}
+<article class="activity">
+<div class="card-art art-{{ loop.index0 % 4 }}">
+<span>{{ event.category or 'À découvrir' }}</span>
+<strong>{{ (event.starts_at|datefr)[:2] }}<small>{{ event.starts_at|datefr }}</small>
+</strong>
+<span class="art-label">On y va ensemble.</span>
+</div>
+<div class="card-body">
+<div class="meta">
+<span>{{ event.category or 'Activité' }}</span>
+<span>Gratuit</span>
+</div>
+<h3>
+<a href="{{ url_for('detail',event_id=event.id) }}">{{ event.title }}</a>
+</h3>
+<p>{{ event.location }}</p>
+<p class="muted">Avec {{ event.organizer }}</p>
+<div class="card-bottom">
+<span>{{ event.available }} place{{ 's' if event.available != 1 else '' }} disponible{{ 's' if event.available != 1 else '' }}</span>
+<a href="{{ url_for('detail',event_id=event.id) }}" aria-label="Découvrir {{ event.title }}">Découvrir ↗</a>
+</div>
+</div>
+</article>
+{% else %}
+<div class="empty">
+<h3>La prochaine rencontre reste à inventer.</h3>
+<p>Aucune activité ne correspond pour le moment. Essayez d’autres filtres ou proposez la vôtre.</p>
+<a class="button secondary" href="{{ url_for('signup') if not g.user else url_for('account') }}">Rejoindre Joinly</a>
+</div>
+{% endfor %}
+</div>

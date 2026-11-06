@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section narrow">
+<a href="{{ url_for('organizer') }}">← Mes activités</a>
+<h1>{{ 'Modifier' if event else 'Créer' }} une activité</h1>
+<form method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Titre<input name="title" value="{{ event.title if event else '' }}" maxlength="180" required>
+</label>
+<label>Description<textarea name="description" rows="6" maxlength="10000" required>{{ event.description if event else '' }}</textarea></label>
+<label>Catégorie<select name="category_id" required>
+{% for c in categories %}
+<option value="{{ c.id }}" {% if event and event.category_id==c.id %}selected{% endif %}>{{ c.name }}</option>
+{% endfor %}
+</select>
+</label>
+<label>Lieu de rendez-vous<input name="location" value="{{ event.location if event else '' }}" maxlength="200" required>
+</label>
+<div class="two">
+<label>Début (heure de Paris)<input type="datetime-local" name="starts_at" value="{{ event.starts_at|inputdate if event else '' }}" required>
+</label>
+<label>Fin (heure de Paris)<input type="datetime-local" name="ends_at" value="{{ event.ends_at|inputdate if event else '' }}" required>
+</label>
+</div>
+<label>Nombre de places<input type="number" name="capacity" min="1" max="100000" value="{{ event.capacity if event else 10 }}" required>
+</label>
+<label>Publication<select name="status">
+<option value="draft" {% if event and event.status=='draft' %}selected{% endif %}>Enregistrer comme brouillon</option>
+<option value="published" {% if event and event.status=='published' %}selected{% endif %}>Publier dans le catalogue</option>
+</select>
+</label>
+<p class="muted">Les activités de cette version sont gratuites. Après une inscription, les dates et le lieu ne peuvent plus être modifiés.</p>
+<button>Enregistrer l’activité</button>
+</form>
+</section>
+{% endblock %}

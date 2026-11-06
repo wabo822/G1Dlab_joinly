@@ -1,0 +1,23 @@
+[Unit]
+Description=Joinly web application
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=joinly
+Group=joinly
+WorkingDirectory=/opt/joinly/current
+EnvironmentFile=/etc/joinly.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/joinly/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 --timeout 30 app:create_app()
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=512M
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section">
+<div class="section-head">
+<div>
+<p class="eyebrow">ESPACE ORGANISATEUR</p>
+<h1>Vos idées prennent vie.</h1>
+</div>
+<a class="button" href="{{ url_for('edit_event') }}">Créer une activité +</a>
+</div>
+{% for e in events %}
+<article class="panel booking-row">
+<span class="badge">{{ {'draft':'Brouillon','published':'Publié','cancelled':'Annulé'}[e.status] }}</span>
+<h2>
+<a href="{{ url_for('detail',event_id=e.id) }}">{{ e.title }}</a>
+</h2>
+<p>{{ e.starts_at|datefr }} · {{ e.location }} · {{ e.capacity-e.available }} / {{ e.capacity }} inscrits</p>
+<div class="actions">
+<a href="{{ url_for('participants',event_id=e.id) }}">Voir les participants</a>
+{% if e.status != 'cancelled' and e.starts_at > now %}
+<a href="{{ url_for('edit_event',event_id=e.id) }}">Modifier</a>
+<form method="post" action="{{ url_for('cancel_event',event_id=e.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="danger small">Annuler l’activité et ses inscriptions</button>
+</form>
+{% endif %}
+</div>
+</article>
+{% else %}
+<div class="empty">
+<h2>Que voulez-vous partager ?</h2>
+<p>Créez votre première activité et choisissez quand la publier.</p>
+</div>
+{% endfor %}
+</section>
+{% endblock %}

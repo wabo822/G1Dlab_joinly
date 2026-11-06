@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section narrow">
+<div class="panel">
+<p class="eyebrow">JOINLY</p>
+<h1>{{ title }}</h1>
+<p>{{ message }}</p>
+<p>Pour corriger un formulaire, revenez à la page précédente dans votre navigateur.</p>
+<a class="button" href="{{ url_for('home') }}">Retour à l’accueil</a>
+</div>
+</section>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section">
+<p class="eyebrow">ADMINISTRATION</p>
+<h1>Prendre soin de la communauté.</h1>
+<nav class="actions">
+<a href="#users">Comptes</a>
+<a href="#faq">FAQ</a>
+<a href="#legal">Pages légales</a>
+<a href="#contact">Messages</a>
+</nav>
+<h2 id="users">Comptes et droits</h2>
+<div class="admin-grid">
+{% for u in users %}
+<form class="panel stack" method="post" action="{{ url_for('admin_user',user_id=u.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<strong>{{ u.display_name }}</strong>
+<span>{{ u.email }}</span>
+<label>État<select name="status">
+<option value="active" {% if u.status=='active' %}selected{% endif %}>Actif</option>
+<option value="suspended" {% if u.status=='suspended' %}selected{% endif %}>Suspendu</option>
+</select>
+</label>
+<fieldset>
+<legend>Habilitations (membre inclus)</legend>
+{% for role,label in [('organizer','Organisateur'),('admin','Administrateur')] %}
+<label class="check">
+<input type="checkbox" name="roles" value="{{ role }}" {% if role in u.roles %}checked{% endif %}>{{ label }}</label>
+{% endfor %}
+</fieldset>
+<button {% if u.id==g.user.id %}disabled{% endif %}>Mettre à jour</button>
+</form>
+{% endfor %}
+</div>
+<h2 id="faq">FAQ</h2>
+<div class="admin-grid">
+{% for f in faqs + [none] %}
+<form class="panel stack" method="post" action="{{ url_for('admin_faq') }}">
+<h3>{{ 'Modifier une réponse' if f else 'Ajouter une question' }}</h3>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% if f %}
+<input type="hidden" name="id" value="{{ f.id }}">
+{% endif %}
+<label>Question<input name="question" maxlength="500" value="{{ f.question if f else '' }}" required>
+</label>
+<label>Réponse<textarea name="answer" maxlength="10000" rows="4" required>{{ f.answer if f else '' }}</textarea></label>
+<label>Ordre<input type="number" name="sort_order" value="{{ f.sort_order if f else 0 }}" required>
+</label>
+<label class="check">
+<input type="checkbox" name="published" {% if f and f.published %}checked{% endif %}>Publiée</label>
+<button>Enregistrer</button>
+</form>
+{% endfor %}
+</div>
+<h2 id="legal">Pages légales</h2>
+<p>Chaque publication conserve une nouvelle version. Les informations de l’éditeur et de l’hébergeur doivent être validées avant ouverture au public.</p>
+<div class="two">
+{% for kind,label in [('terms','CGU'),('legal_notice','Mentions légales')] %}
+{% set latest=pages|selectattr('kind','equalto',kind)|first %}
+<form class="panel stack" method="post" action="{{ url_for('admin_legal') }}">
+<h3>{{ label }}</h3>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="kind" value="{{ kind }}">
+<label>Contenu<textarea name="content" rows="12" maxlength="30000" required>{{ latest.content if latest else '' }}</textarea></label>
+<button>Publier une nouvelle version</button>
+</form>
+{% endfor %}
+</div>
+<h2 id="contact">Demandes de contact</h2>
+{% for m in messages %}
+<article class="panel booking-row">
+<span class="badge">{{ 'Traitée' if m.resolved else 'À traiter' }}</span>
+<h3>{{ m.subject }}</h3>
+<p>{{ m.name }} · {{ m.email }} · {{ m.created_at|datefr }}</p>
+<p class="prose">{{ m.message }}</p>
+<form method="post" action="{{ url_for('resolve_contact',message_id=m.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label class="check">
+<input type="checkbox" name="resolved" {% if m.resolved %}checked{% endif %}>Demande traitée</label>
+<button class="secondary small">Enregistrer</button>
+</form>
+</article>
+{% else %}
+<p>Aucune demande reçue.</p>
+{% endfor %}
+</section>
+{% endblock %}
