@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 PARIS = ZoneInfo('Europe/Paris')
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,8 @@ def create_app(config=None):
         SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', '0') == '1',
         MAX_CONTENT_LENGTH=64 * 1024,
+        TRUST_PROXY=os.environ.get('TRUST_PROXY', '0') == '1',
+        TRUSTED_HOSTS=[host.strip() for host in os.environ.get('TRUSTED_HOSTS', '').split(',') if host.strip()] or None,
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
     )
@@ -39,6 +42,9 @@ def create_app(config=None):
         app.config.update(config)
     if not app.config['SECRET_KEY']:
         raise RuntimeError('Set SECRET_KEY in the server environment.')
+    if app.config['TRUST_PROXY']:
+        # Only enable behind the local Nginx proxy, which overwrites these headers.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0, x_port=0, x_prefix=0)
     CSRFProtect(app)
 
     def db():

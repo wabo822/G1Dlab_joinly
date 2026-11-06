@@ -290,3 +290,17 @@ def test_reset_mail_transport_and_expiry(app, db, monkeypatch):
     db.execute("UPDATE password_resets SET expires_at=now()-interval '1 second'")
     token = sent[0].get_content().strip().rsplit('/',1)[-1]
     assert client.get('/reset-password/'+token).status_code == 400
+
+
+def test_trusted_proxy_https_forms_and_hosts(app):
+    proxied = create_app({'TESTING':True,'DATABASE':'joinly_test','SECRET_KEY':'proxy-test-secret','TRUST_PROXY':True,'TRUSTED_HOSTS':['isep.wangjiahan.com'],'SESSION_COOKIE_SECURE':True})
+    client = proxied.test_client()
+    headers = {'Host':'isep.wangjiahan.com','X-Forwarded-Proto':'https','X-Forwarded-For':'192.0.2.1'}
+    response = client.get('/contact',headers=headers)
+    assert response.status_code == 200
+    assert 'Secure;' in response.headers['Set-Cookie']
+    token = re.search(r'name="csrf_token" value="([^"]+)"',response.text).group(1)
+    headers['Referer'] = 'https://isep.wangjiahan.com/contact'
+    response = client.post('/contact',headers=headers,data={'csrf_token':token,'name':'Proxy test','email':'proxy@example.test','subject':'HTTPS','message':'Test'})
+    assert response.status_code == 302
+    assert client.get('/',headers={'Host':'untrusted.example'}).status_code == 400

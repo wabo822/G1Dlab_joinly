@@ -117,15 +117,20 @@ de `joinly_test`.
 
 ## Mise en ligne et e-mails
 
-L’installation actuelle reste locale au serveur. Pour une ouverture publique,
-configurer un reverse proxy HTTPS et `COOKIE_SECURE=1`, un domaine et les textes
-légaux validés. Hangar doit pouvoir relayer/exécuter Flask et accéder à PostgreSQL ;
+La V1 est déployée sur **https://isep.wangjiahan.com** avec Nginx, un certificat
+Let’s Encrypt et une redirection HTTP vers HTTPS. La configuration effective est
+versionnée dans `deploy/isep.wangjiahan.com.nginx`. Certbot renouvelle le certificat
+et un hook recharge Nginx. Les textes légaux restent à compléter. Hangar doit pouvoir relayer/exécuter Flask et accéder à PostgreSQL ;
 son ancien hébergement de fichiers statiques ne suffit pas.
 
-Le serveur n’accorde aucune confiance aux en-têtes `X-Forwarded-*` envoyés par les
-visiteurs. Si un proxy est ajouté, configurer précisément les proxys de confiance
-et le contrôle de débit en amont : sinon les demandes partagent l’adresse du proxy
-et donc les quotas. Ne pas exposer Gunicorn directement comme service public.
+Le service utilise `TRUST_PROXY=1` uniquement derrière le Nginx local. Celui-ci
+**remplace** `X-Forwarded-For` par l’adresse du client et `X-Forwarded-Proto` par
+le protocole reçu. Flask ne fait confiance qu’à un saut pour ces deux valeurs ;
+les en-têtes d’hôte transférés ne sont pas utilisés. `TRUSTED_HOSTS` est limité au
+sous-domaine et aux noms locaux, `COOKIE_SECURE=1` et `PUBLIC_BASE_URL` désigne
+l’origine HTTPS. Garder Gunicorn sur localhost et ne pas activer ce mode pour
+un accès direct public. La configuration locale du dépôt conserve les valeurs
+adaptées aux tests ; celle du service est dans `/etc/joinly.env`.
 
 Le mot de passe oublié utilise SMTP avec STARTTLS, un lien aléatoire de 30 minutes
 stocké sous forme de hachage et utilisable une seule fois. Renseigner :

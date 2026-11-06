@@ -29,7 +29,7 @@ sur PostgreSQL 16, Python 3.12 et Chromium. Les données des tests sont isolées
 
 ## Résultats
 
-- 17 tests automatisés de backend réussis, dont deux tests concurrents.
+- 18 tests automatisés de backend réussis, dont deux tests concurrents.
 - Parcours navigateur : inscription organisateur → création/publication → inscription
   membre → réservation → liste des participants → annulation → contact → lecture
   administrative du message.
@@ -47,9 +47,10 @@ autres pistes économiques restent hors de cette première version. Aucune API I
 n’est appelée. Le consentement est conservé pour une intégration future.
 
 Les contenus légaux et l’identité du responsable ne sont pas une validation
-juridique ; le propriétaire du projet doit les compléter. Le domaine HTTPS,
+juridique ; le propriétaire du projet doit les compléter. La V1 est accessible en HTTPS sur `isep.wangjiahan.com`. Le test supplémentaire
+valide les formulaires HTTPS derrière le proxy et le contrôle des hôtes.
 SMTP, la politique de conservation et les sauvegardes automatiques restent à
-configurer pour une ouverture réelle au public. Hangar continue de servir la
+configurer. Hangar continue de servir la
 maquette jusqu’à adaptation de son déploiement.
 
 Les tests responsives et les bonnes pratiques HTML ne constituent pas un audit

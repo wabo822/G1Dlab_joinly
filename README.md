@@ -256,6 +256,10 @@ ne démarre ni le backend ni les fonctionnalités de compte et de réservation.
 
 ## Déploiement
 
+La V1 est en ligne sur **https://isep.wangjiahan.com**. Nginx relaie HTTPS vers
+Gunicorn ; le certificat du sous-domaine et son renouvellement sont configurés.
+Le domaine principal conserve sa configuration existante.
+
 La version complète est exécutable sur cette machine avec Gunicorn et PostgreSQL.
 Un service systemd est fourni pour la maintenir active sur `127.0.0.1:8000`.
 L’accès distant de développement peut utiliser un tunnel SSH.
