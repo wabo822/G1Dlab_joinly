@@ -45,7 +45,7 @@ Le dépôt de référence est [wabo822/G1Dlab_joinly](https://github.com/wabo822
 | Présentation graphique | CSS, logos et ressources graphiques présents. |
 | Accès principal | Le fichier racine `index.html` redirige vers `joinly_front/index.html`. |
 | Recherche, compte et réservation | Des liens ou formulaires sont visibles, mais aucun service correspondant n’est livré dans l’arborescence examinée. |
-| Serveur et base de données | Aucun backend ni schéma de base de données livré dans l’arborescence examinée. |
+| Serveur et base de données | Schéma PostgreSQL initial livré dans `database/` ; aucun backend connecté à ce stade. |
 
 Les liens vers `explore.html`, `activity.html`, `host.html`, `login.html`, `signup.html`, `business.html`, `venue.html` et `contact.html` désignent des pages absentes de cette version. Ils décrivent une intention de navigation et ne constituent pas des fonctionnalités opérationnelles.
 
@@ -203,7 +203,7 @@ générale sans présenter les références comme une garantie d'exactitude.
 
 ## 8 Données à gérer
 
-Le modèle suivant constitue une base de conception ; le schéma physique sera validé après le choix de la base de données.
+Le moteur retenu est PostgreSQL. Le schéma physique initial figure dans `database/migrations/001_initial.sql` ; les règles métier restant à implémenter sont précisées dans `database/README.md`.
 
 | Entité | Principales données | Relations et contraintes |
 | --- | --- | --- |
@@ -224,7 +224,7 @@ Le prix et les transactions seront ajoutés uniquement si les activités payante
 
 ### 9.1 Architecture et déploiement
 
-L’application cible comprend un frontend, un backend assurant les règles métier et une base persistante. Le choix des langages, frameworks, moteurs de base et mécanismes de session reste à valider : aucun framework ne doit être présenté comme déjà retenu.
+L’application cible comprend un frontend, un backend assurant les règles métier et une base persistante. PostgreSQL est retenu pour la base. Le choix des langages, frameworks et mécanismes de session reste à valider : aucun framework ne doit être présenté comme déjà retenu.
 
 La configuration Hangar décrite dans le README sert actuellement la racine du dépôt depuis `/var/www/html`. La redirection racine doit rester opérationnelle tant que cette configuration est conservée. Avant de retenir le backend, l’équipe doit vérifier que l’hébergement autorise son exécution, l’accès à la base et la configuration des variables d’environnement. Le déploiement statique actuel ne démontre pas cette compatibilité.
 

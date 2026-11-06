@@ -198,8 +198,12 @@ et recommandations. Un adaptateur permettra ensuite de passer au modèle local.
 Le catalogue reste la source des disponibilités et les permissions s'appliquent
 avant tout accès au profil.
 
-Les technologies, la structure du code et les modalités de déploiement seront
-précisées lorsque les choix techniques du groupe auront été validés.
+Le moteur de base de données retenu est **PostgreSQL**. Une première base de
+développement et son schéma sont disponibles ; le frontend statique ne s’y
+connecte pas encore. Le backend et son déploiement restent à choisir.
+
+Les instructions d’installation, de connexion, de test et les limites du schéma
+figurent dans [database/README.md](database/README.md).
 
 ## Identité visuelle
 
@@ -261,7 +265,8 @@ reconstruction automatique n'est configurée.
 - [x] Ajouter les premiers visuels Joinly.
 - [x] Présenter le projet et son périmètre dans le README.
 - [ ] Valider le périmètre fonctionnel et les parcours utilisateurs.
-- [ ] Choisir les technologies du frontend, du backend et de la base de données.
+- [x] Choisir PostgreSQL et initialiser la base de développement.
+- [ ] Choisir les technologies du frontend et du backend.
 - [ ] Concevoir les maquettes et le modèle de données.
 - [ ] Réaliser toutes les exigences de priorité haute, y compris le back-office.
 - [ ] Développer la découverte d'activités et la gestion des événements.
