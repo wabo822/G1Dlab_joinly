@@ -278,7 +278,8 @@ def test_reset_mail_transport_and_expiry(app, db, monkeypatch):
         def __init__(self,*args,**kwargs): pass
         def __enter__(self): return self
         def __exit__(self,*args): pass
-        def starttls(self): pass
+        def starttls(self, **kwargs):
+            assert kwargs["context"].check_hostname
         def send_message(self,message): sent.append(message)
     monkeypatch.setattr('app.smtplib.SMTP', Mail)
     client = app.test_client()

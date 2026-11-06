@@ -200,3 +200,22 @@ sudo -u postgres pg_dump -Fc joinly > joinly.dump
 Les demandes de contact sont enregistrées et consultables dans l’administration ;
 elle ne les envoie pas automatiquement par mail. Les fonctionnalités sociales,
 paiements et assistant IA ne sont pas activés dans cette V1.
+
+### Connecter Brevo sans exposer la clé
+
+Créer le compte Brevo et terminer l’authentification du domaine et du sender
+sur son tableau de bord. Récupérer le **SMTP login** et une **clé SMTP** (pas une
+clé API) depuis https://app.brevo.com/settings/keys/smtp.
+
+Sur le serveur, exécuter :
+
+```bash
+sudo python3 /root/joinly/scripts/configure-brevo.py
+```
+
+Le script demande login, adresse d’expédition vérifiée et clé masquée. Il vérifie
+la connexion TLS et l’authentification avant de remplacer atomiquement les seuls
+paramètres SMTP de `/etc/joinly.env`, puis redémarre Joinly. Il conserve les droits
+du fichier et n’envoie aucun e-mail. La vérification de l’expéditeur et la livraison
+réelle restent à tester depuis le parcours « Mot de passe oublié ». Ne pas mettre
+la clé SMTP dans un message, une commande shell ou un fichier suivi par Git.

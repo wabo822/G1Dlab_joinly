@@ -3,6 +3,7 @@ import os
 import re
 import secrets
 import smtplib
+import ssl
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from functools import wraps
@@ -502,7 +503,7 @@ def create_app(config=None):
                 message.set_content('Votre lien valable 30 minutes : ' + os.environ['PUBLIC_BASE_URL'].rstrip('/') + url_for('reset_password', token=token))
                 try:
                     with smtplib.SMTP(os.environ['SMTP_HOST'], int(os.environ.get('SMTP_PORT', '587')), timeout=10) as smtp:
-                        smtp.starttls()
+                        smtp.starttls(context=ssl.create_default_context())
                         if os.environ.get('SMTP_USER'):
                             smtp.login(os.environ['SMTP_USER'], os.environ['SMTP_PASSWORD'])
                         smtp.send_message(message)
