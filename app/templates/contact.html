@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section narrow">
+<p class="eyebrow">RESTONS EN CONTACT</p>
+<h1>On vous écoute.</h1>
+<p>Une question sur Joinly ou une difficulté ? Votre message sera enregistré pour l’équipe.</p>
+<form method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Nom<input name="name" maxlength="100" autocomplete="name" required>
+</label>
+<label>E-mail de réponse<input type="email" name="email" maxlength="254" autocomplete="email" required>
+</label>
+<label>Objet<input name="subject" maxlength="180" required>
+</label>
+<label>Message<textarea name="message" rows="6" maxlength="5000" required></textarea></label>
+<button>Envoyer ma demande</button>
+</form>
+</section>
+{% endblock %}

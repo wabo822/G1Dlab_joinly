@@ -45,7 +45,7 @@ Le dépôt de référence est [wabo822/G1Dlab_joinly](https://github.com/wabo822
 | Présentation graphique | CSS, logos et ressources graphiques présents. |
 | Accès principal | Le fichier racine `index.html` redirige vers `joinly_front/index.html`. |
 | Recherche, compte et réservation | Des liens ou formulaires sont visibles, mais aucun service correspondant n’est livré dans l’arborescence examinée. |
-| Serveur et base de données | Schéma PostgreSQL initial livré dans `database/` ; aucun backend connecté à ce stade. |
+| Serveur et base de données | État initial : schéma PostgreSQL dans `database/`. La V1 Flask est désormais connectée ; voir la matrice de recette. |
 
 Les liens vers `explore.html`, `activity.html`, `host.html`, `login.html`, `signup.html`, `business.html`, `venue.html` et `contact.html` désignent des pages absentes de cette version. Ils décrivent une intention de navigation et ne constituent pas des fonctionnalités opérationnelles.
 
@@ -224,7 +224,7 @@ Le prix et les transactions seront ajoutés uniquement si les activités payante
 
 ### 9.1 Architecture et déploiement
 
-L’application cible comprend un frontend, un backend assurant les règles métier et une base persistante. PostgreSQL est retenu pour la base. Le choix des langages, frameworks et mécanismes de session reste à valider : aucun framework ne doit être présenté comme déjà retenu.
+L’application cible comprend un frontend, un backend assurant les règles métier et une base persistante. La V1 utilise PostgreSQL, Flask et Jinja, avec des sessions révocables enregistrées en base. La configuration de production reste à finaliser.
 
 La configuration Hangar décrite dans le README sert actuellement la racine du dépôt depuis `/var/www/html`. La redirection racine doit rester opérationnelle tant que cette configuration est conservée. Avant de retenir le backend, l’équipe doit vérifier que l’hébergement autorise son exécution, l’accès à la base et la configuration des variables d’environnement. Le déploiement statique actuel ne démontre pas cette compatibilité.
 
@@ -376,3 +376,11 @@ Après validation, les décisions de périmètre et les règles de gestion appro
 ### Historique de révision
 
 - 0.2, 20 octobre 2026 : ajout de l’assistant IA contextualisé, recommandations selon le profil, prototype API et prompt engineering, cible de modèle local à poids ouverts. Un vrai RAG reste hors du prototype.
+
+## Livraison V1 — 6 novembre 2026
+
+Le socle élevé et J01–J07 sont implémentés. La [matrice de recette](recette-v1.md)
+détaille les vérifications et limites. Le [guide technique](developpement.md)
+décrit installation, migrations et exploitation. Les paragraphes de cadrage
+ci-dessus conservent les priorités initiales ; ils ne décrivent pas tous l’état
+actuel de la livraison.

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section">
+<p class="eyebrow">MON ESPACE</p>
+<h1>Bonjour {{ g.user.display_name }}.</h1>
+<div class="detail-grid">
+<div>
+<h2>Mes inscriptions</h2>
+{% for b in bookings %}
+<article class="panel booking-row">
+<span class="badge">{{ 'Confirmée' if b.status == 'confirmed' else 'Annulée' }}</span>
+<h3>
+<a href="{{ url_for('detail',event_id=b.event_id) }}">{{ b.title }}</a>
+</h3>
+<p>{{ b.starts_at|datefr }} · {{ b.location }}</p>
+{% if b.status=='confirmed' and b.starts_at>now %}
+<form method="post" action="{{ url_for('cancel_booking',booking_id=b.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="secondary small">Annuler ma réservation</button>
+</form>
+{% endif %}
+</article>
+{% else %}
+<div class="empty">
+<h3>Votre agenda attend sa première rencontre.</h3>
+<a class="button" href="{{ url_for('activities') }}">Trouver une activité</a>
+</div>
+{% endfor %}
+</div>
+<aside class="panel">
+<h2>Mon profil</h2>
+<p class="muted">{{ g.user.email }}</p>
+<form method="post" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Nom affiché<input name="display_name" maxlength="100" value="{{ g.user.display_name }}" required>
+</label>
+<label>Centres d’intérêt<input name="interests" maxlength="500" value="{{ preferences.interests|join(', ') if preferences else '' }}" placeholder="Nature, cuisine, jeux">
+</label>
+<label>Zone préférée<input name="chosen_area" maxlength="150" value="{{ preferences.chosen_area or '' if preferences else '' }}">
+</label>
+<label class="check">
+<input type="checkbox" name="assistant_consent" {% if preferences and preferences.assistant_consent %}checked{% endif %}>Autoriser le futur assistant à utiliser mes préférences</label>
+<small>Préférences privées. L’assistant IA n’est pas activé dans cette version.</small>
+<button>Enregistrer mon profil</button>
+</form>
+<hr>
+<details>
+<summary>E-mail et mot de passe</summary>
+<form class="stack" method="post" action="{{ url_for('account_security') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Mot de passe actuel<input type="password" name="current_password" autocomplete="current-password" maxlength="128" required>
+</label>
+<label>Adresse e-mail<input type="email" name="email" value="{{ g.user.email }}" maxlength="254" required>
+</label>
+<label>Nouveau mot de passe (facultatif)<input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128">
+</label>
+<button>Modifier mes identifiants</button>
+</form>
+</details>
+{% if 'organizer' in g.roles %}
+<hr>
+<a href="{{ url_for('organizer') }}">Gérer mes activités →</a>
+{% endif %}
+</aside>
+</div>
+</section>
+{% endblock %}

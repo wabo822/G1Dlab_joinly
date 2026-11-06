@@ -1,0 +1,292 @@
+import hashlib
+import re
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from threading import Barrier
+from zoneinfo import ZoneInfo
+
+import psycopg
+import pytest
+from psycopg.rows import dict_row
+from werkzeug.security import generate_password_hash
+from app import create_app
+
+PASSWORD = 'A sufficiently long test password'
+
+@pytest.fixture()
+def app():
+    application = create_app({'TESTING': True, 'DATABASE': 'joinly_test', 'SECRET_KEY': 'test-secret-not-for-deployment', 'WTF_CSRF_ENABLED': False})
+    with psycopg.connect(dbname='joinly_test', autocommit=True) as db:
+        db.execute('TRUNCATE users,events,categories,faqs,legal_pages,contact_requests,rate_limits CASCADE')
+    return application
+
+@pytest.fixture()
+def db(app):
+    with psycopg.connect(dbname='joinly_test', row_factory=dict_row, autocommit=True) as connection:
+        yield connection
+
+
+def user(db, email='member@example.test', roles=('member',)):
+    result = db.execute('INSERT INTO users(email,display_name,password_hash) VALUES (%s,%s,%s) RETURNING id', (email, email.split('@')[0], generate_password_hash(PASSWORD))).fetchone()['id']
+    db.execute('INSERT INTO user_roles SELECT %s,id FROM roles WHERE name=ANY(%s)', (result,list(roles)))
+    return result
+
+
+def login(app, email='member@example.test'):
+    client = app.test_client()
+    assert client.post('/login', data={'email': email,'password': PASSWORD}).status_code == 302
+    return client
+
+
+def event(db, owner, capacity=1, status='published'):
+    category = db.execute("INSERT INTO categories(name) VALUES ('Nature') ON CONFLICT(name) DO UPDATE SET name=EXCLUDED.name RETURNING id").fetchone()['id']
+    return db.execute("""INSERT INTO events(organizer_id,category_id,title,description,location,starts_at,ends_at,capacity,status)
+        VALUES (%s,%s,'Balade','Au bord du fleuve','Paris',now()+interval '2 days',now()+interval '2 days 2 hours',%s,%s) RETURNING id""", (owner,category,capacity,status)).fetchone()['id']
+
+
+def event_form(db, event_id, **changes):
+    row = db.execute('SELECT * FROM events WHERE id=%s', (event_id,)).fetchone()
+    form = {key: str(row[key]) for key in ('title','description','location','capacity','status','category_id')}
+    for field in ('starts_at','ends_at'):
+        form[field] = row[field].astimezone(ZoneInfo('Europe/Paris')).isoformat(timespec='microseconds').split('+')[0]
+    form.update(changes)
+    return form
+
+
+def test_public_pages(app):
+    client = app.test_client()
+    for path in ['/', '/activities', '/faq','/contact','/login','/signup','/legal/terms','/legal/legal_notice','/forgot-password','/health']:
+        assert client.get(path).status_code == 200, path
+    assert client.get('/missing').status_code == 404
+
+
+def test_signup_roles_duplicates_and_password(app, db):
+    client = app.test_client()
+    form = {'email':'  NEW@Example.test ', 'display_name':'New', 'password':PASSWORD, 'role':'organizer'}
+    assert client.post('/signup', data=form).status_code == 302
+    row = db.execute("SELECT * FROM users WHERE email='new@example.test'").fetchone()
+    assert row['password_hash'] != PASSWORD
+    roles = db.execute('SELECT r.name FROM roles r JOIN user_roles ur ON r.id=ur.role_id WHERE user_id=%s',(row['id'],)).fetchall()
+    assert {r['name'] for r in roles} == {'member','organizer'}
+    assert client.post('/signup', data=form).status_code == 409
+    assert client.post('/signup', data={**form,'email':'admin@example.test','role':'admin'}).status_code == 400
+    assert client.post('/signup', data={**form,'password':'short'}).status_code == 400
+
+
+def test_session_logout_and_suspend(app, db):
+    member = user(db)
+    client = login(app)
+    assert client.get('/account').status_code == 200
+    token = client.get_cookie('session').value
+    client.post('/logout')
+    client.set_cookie('session',token)
+    assert client.get('/account').status_code == 302
+    client = login(app)
+    db.execute("UPDATE users SET status='suspended' WHERE id=%s",(member,))
+    assert client.get('/account').status_code == 302
+    assert client.post('/login',data={'email':'member@example.test','password':PASSWORD}).status_code == 401
+
+
+def test_csrf_and_headers(app):
+    app.config['WTF_CSRF_ENABLED'] = True
+    client = app.test_client()
+    assert client.post('/contact',data={}).status_code == 400
+    response = client.get('/contact')
+    token = re.search(r'name="csrf_token" value="([^"]+)"',response.text).group(1)
+    assert client.post('/contact',data={'csrf_token':token,'name':'Test','email':'test@example.test','subject':'Question','message':'Hello'}).status_code == 302
+    assert response.headers['X-Frame-Options'] == 'DENY'
+    assert response.headers['Cache-Control'] == 'no-store'
+
+
+def test_profile_saved_and_cannot_grant_admin(app, db):
+    uid = user(db)
+    client = login(app)
+    assert client.post('/account',data={'display_name':'<script>alert(1)</script>','interests':'Nature, Jeux','chosen_area':'Paris','roles':'admin'}).status_code == 302
+    html = client.get('/account').text
+    assert '&lt;script&gt;' in html and '<script>alert' not in html
+    assert client.get('/admin').status_code == 403
+    assert db.execute('SELECT assistant_consent FROM member_preferences WHERE user_id=%s',(uid,)).fetchone()['assistant_consent'] is False
+
+
+def test_catalogue_filters_and_private_drafts(app, db):
+    owner = user(db, roles=('member','organizer'))
+    public = event(db,owner)
+    draft = event(db,owner,status='draft')
+    client = app.test_client()
+    assert 'Balade' in client.get('/activities?q=FLEUVE&location=paris').text
+    assert 'Balade' not in client.get('/activities?q=unknown').text
+    assert client.get(f'/activities/{draft}').status_code == 404
+    assert client.get(f'/activities/{public}').status_code == 200
+    assert client.get('/activities?from=invalid').status_code == 400
+
+
+def test_booking_cancel_rebook_and_ownership(app, db):
+    uid = user(db)
+    other = user(db,'other@example.test')
+    eid = event(db,uid,2)
+    client = login(app)
+    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve').status_code == 409
+    bid = db.execute('SELECT id FROM reservations WHERE member_id=%s',(uid,)).fetchone()['id']
+    assert login(app,'other@example.test').post(f'/reservations/{bid}/cancel').status_code == 404
+    assert client.post(f'/reservations/{bid}/cancel').status_code == 302
+    assert client.post(f'/reservations/{bid}/cancel').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE status='confirmed'").fetchone()['n'] == 1
+
+
+def test_last_place_concurrency(app, db):
+    owner = user(db)
+    user(db,'second@example.test')
+    eid = event(db,owner,1)
+    clients = [login(app), login(app,'second@example.test')]
+    barrier = Barrier(2)
+    def reserve(client):
+        barrier.wait(timeout=5)
+        return client.post(f'/activities/{eid}/reserve').status_code
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(reserve, clients))
+    assert sorted(results) == [302,400]
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'",(eid,)).fetchone()['n'] == 1
+
+
+def test_organizer_permissions_and_lifecycle(app, db):
+    owner = user(db,roles=('member','organizer'))
+    user(db,'stranger@example.test',roles=('member','organizer'))
+    eid = event(db,owner,2)
+    client = login(app)
+    stranger = login(app,'stranger@example.test')
+    assert stranger.get(f'/organizer/{eid}/participants').status_code == 404
+    assert stranger.post(f'/organizer/{eid}/cancel').status_code == 404
+    assert stranger.post(f'/organizer/{eid}/edit',data=event_form(db,eid)).status_code == 404
+    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,location='Lyon')).status_code == 400
+    assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,capacity='0')).status_code == 400
+    assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,title='Updated')).status_code == 302
+    html = client.get(f'/organizer/{eid}/participants').text
+    assert 'member@example.test' not in html
+    assert client.post(f'/organizer/{eid}/cancel').status_code == 302
+    assert db.execute('SELECT status FROM reservations WHERE event_id=%s',(eid,)).fetchone()['status'] == 'cancelled'
+    assert stranger.post(f'/activities/{eid}/reserve').status_code == 400
+
+
+def test_event_creation_and_draft_publication(app, db):
+    owner = user(db,roles=('member','organizer'))
+    source = event(db,owner)
+    client = login(app)
+    form = event_form(db,source,title='New draft',status='draft')
+    assert client.post('/organizer/new',data=form).status_code == 302
+    row = db.execute("SELECT id FROM events WHERE title='New draft'").fetchone()
+    assert row
+    assert app.test_client().get(f'/activities/{row["id"]}').status_code == 404
+    form['status'] = 'published'
+    assert client.post(f'/organizer/{row["id"]}/edit',data=form).status_code == 302
+    assert app.test_client().get(f'/activities/{row["id"]}').status_code == 200
+
+
+def test_started_events_and_capacity_reduction(app, db):
+    owner = user(db,roles=('member','organizer'))
+    user(db,'second@example.test')
+    eid = event(db,owner,2)
+    client = login(app)
+    client.post(f'/activities/{eid}/reserve')
+    login(app,'second@example.test').post(f'/activities/{eid}/reserve')
+    assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,capacity='1')).status_code == 400
+    db.execute("UPDATE events SET starts_at=now()-interval '1 hour' WHERE id=%s",(eid,))
+    bid = db.execute('SELECT id FROM reservations WHERE member_id=%s',(owner,)).fetchone()['id']
+    assert client.post(f'/reservations/{bid}/cancel').status_code == 400
+    assert client.post(f'/organizer/{eid}/cancel').status_code == 400
+
+
+def test_admin_content_contact_and_roles(app, db):
+    admin_id = user(db,'admin@example.test',('member','admin'))
+    member = user(db)
+    admin = login(app,'admin@example.test')
+    member_client = login(app)
+    assert member_client.get('/admin').status_code == 403
+    assert admin.get('/admin').status_code == 200
+    assert admin.post('/admin/faq',data={'question':'Question','answer':'Answer','sort_order':'1','published':'on'}).status_code == 302
+    assert 'Answer' in app.test_client().get('/faq').text
+    faq_id = db.execute('SELECT id FROM faqs').fetchone()['id']
+    admin.post('/admin/faq',data={'id':faq_id,'question':'Question','answer':'Answer','sort_order':'1'})
+    assert 'Answer' not in app.test_client().get('/faq').text
+    for content in ['First version','Second version']:
+        assert admin.post('/admin/legal',data={'kind':'terms','content':content}).status_code == 302
+    assert 'Second version' in app.test_client().get('/legal/terms').text
+    assert db.execute('SELECT count(*) AS n FROM legal_pages').fetchone()['n'] == 2
+    assert app.test_client().post('/contact',data={'name':'Someone','email':'visitor@example.test','subject':'Help','message':'Contact content'}).status_code == 302
+    assert 'Contact content' in admin.get('/admin').text
+    assert admin.post(f'/admin/users/{admin_id}',data={'status':'suspended'}).status_code == 400
+    assert admin.post(f'/admin/users/{member}',data={'status':'suspended','roles':['organizer']}).status_code == 302
+    assert member_client.get('/account').status_code == 302
+
+
+def test_password_reset_single_use_and_revocation(app, db):
+    uid = user(db)
+    client = login(app)
+    token = 'only-for-reset-test'
+    db.execute("INSERT INTO password_resets VALUES (%s,%s,now()+interval '10 minutes')",(hashlib.sha256(token.encode()).hexdigest(),uid))
+    other = app.test_client()
+    assert other.post('/reset-password/'+token,data={'password':PASSWORD+'new'}).status_code == 302
+    assert other.get('/reset-password/'+token).status_code == 400
+    assert client.get('/account').status_code == 302
+    assert other.post('/login',data={'email':'member@example.test','password':PASSWORD+'new'}).status_code == 302
+
+
+def test_rate_limit(app):
+    client = app.test_client()
+    for _ in range(10):
+        assert client.post('/login',data={'email':'unknown@example.test','password':PASSWORD}).status_code == 401
+    assert client.post('/login',data={'email':'unknown@example.test','password':PASSWORD}).status_code == 429
+
+
+def test_change_email_password_invalidates_all_sessions(app, db):
+    user(db)
+    first = login(app)
+    second = login(app)
+    assert first.post('/account/security',data={'current_password':'wrong','email':'changed@example.test','password':PASSWORD+'new'}).status_code == 400
+    assert first.post('/account/security',data={'current_password':PASSWORD,'email':'changed@example.test','password':PASSWORD+'new'}).status_code == 302
+    assert second.get('/account').status_code == 302
+    assert app.test_client().post('/login',data={'email':'changed@example.test','password':PASSWORD+'new'}).status_code == 302
+
+
+def test_concurrent_event_cancel_and_reserve(app, db):
+    owner = user(db,roles=('member','organizer'))
+    user(db,'second@example.test')
+    eid = event(db,owner,2)
+    organizer = login(app)
+    member = login(app,'second@example.test')
+    barrier = Barrier(2)
+    def action(pair):
+        client, path = pair
+        barrier.wait(timeout=5)
+        return client.post(path).status_code
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        result = list(executor.map(action, [(organizer,f'/organizer/{eid}/cancel'), (member,f'/activities/{eid}/reserve')]))
+    assert result[0] == 302 and result[1] in (302,400)
+    assert db.execute('SELECT status FROM events WHERE id=%s',(eid,)).fetchone()['status'] == 'cancelled'
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'",(eid,)).fetchone()['n'] == 0
+
+
+def test_reset_mail_transport_and_expiry(app, db, monkeypatch):
+    user(db)
+    monkeypatch.setenv('SMTP_HOST','mail.example.test')
+    monkeypatch.setenv('MAIL_FROM','joinly@example.test')
+    monkeypatch.setenv('PUBLIC_BASE_URL','https://joinly.example.test')
+    sent = []
+    class Mail:
+        def __init__(self,*args,**kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self,*args): pass
+        def starttls(self): pass
+        def send_message(self,message): sent.append(message)
+    monkeypatch.setattr('app.smtplib.SMTP', Mail)
+    client = app.test_client()
+    real = client.post('/forgot-password',data={'email':'member@example.test'},follow_redirects=True)
+    unknown = app.test_client().post('/forgot-password',data={'email':'unknown@example.test'},follow_redirects=True)
+    assert 'Si ce compte est actif' in real.text and 'Si ce compte est actif' in unknown.text
+    assert len(sent) == 1
+    assert 'https://joinly.example.test/reset-password/' in sent[0].get_content()
+    db.execute("UPDATE password_resets SET expires_at=now()-interval '1 second'")
+    token = sent[0].get_content().strip().rsplit('/',1)[-1]
+    assert client.get('/reset-password/'+token).status_code == 400

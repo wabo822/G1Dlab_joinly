@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero">
+<div class="container hero-grid">
+<div>
+<p class="eyebrow">LES BONS MOMENTS SE PARTAGENT</p>
+<h1>Des choses à faire.<br>Des gens à rencontrer.</h1>
+<p class="lead">Une balade, une partie, un atelier. Trouvez votre prochaine activité et les personnes avec qui la partager.</p>
+<div class="actions">
+<a class="button" href="{{ url_for('activities') }}">Explorer les activités ↗</a>
+<a class="button secondary" href="{{ url_for('organizer') if 'organizer' in g.roles else url_for('signup') }}">Proposer une activité</a>
+</div>
+<p class="hero-note">Près de chez vous · À votre rythme · Ensemble</p>
+</div>
+<div class="hero-art" aria-label="Illustration de rencontres autour d’activités">
+<div class="shape shape-blue">
+</div>
+<div class="shape shape-purple">
+</div>
+<div class="shape shape-coral">
+</div>
+<div class="invite invite-a">
+<span class="emoji">☀</span>
+<div>
+<strong>Un peu d’air frais ?</strong>
+<p>Une balade, de nouvelles rencontres.</p>
+</div>
+</div>
+<div class="invite invite-b">
+<span class="emoji">✦</span>
+<div>
+<strong>À vous de jouer.</strong>
+<p>Le prochain bon moment commence ici.</p>
+</div>
+</div>
+<div class="art-caption">Moins de « un jour ».<br>Plus de « on y va ».</div>
+</div>
+</div>
+</section>
+<section class="container section">
+<div class="section-head">
+<div>
+<p class="eyebrow">VOTRE PROCHAIN RENDEZ-VOUS</p>
+<h2>Ça se passe bientôt</h2>
+</div>
+<a href="{{ url_for('activities') }}">Tout explorer →</a>
+</div>
+{% include '_cards.html' %}
+</section>
+<section class="how">
+<div class="container section">
+<p class="eyebrow">SIMPLE COMME UNE RENCONTRE</p>
+<h2>De l’envie au premier bonjour.</h2>
+<div class="three">
+<article>
+<span class="step">01</span>
+<h3>Trouvez votre envie</h3>
+<p>Explorez les activités par mot-clé, lieu ou catégorie.</p>
+</article>
+<article>
+<span class="step">02</span>
+<h3>Gardez votre place</h3>
+<p>Créez votre compte et inscrivez-vous en quelques clics.</p>
+</article>
+<article>
+<span class="step">03</span>
+<h3>Vivez le moment</h3>
+<p>Retrouvez les détails dans votre espace et rendez-vous sur place.</p>
+</article>
+</div>
+</div>
+</section>
+<section class="container section">
+<div class="cta">
+<div>
+<h2>Une idée mérite d’être partagée.</h2>
+<p>Rassemblez des personnes autour de ce que vous aimez.</p>
+</div>
+<a class="button" href="{{ url_for('organizer') if 'organizer' in g.roles else url_for('signup') }}">Devenir organisateur ↗</a>
+</div>
+</section>
+{% endblock %}

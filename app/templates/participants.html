@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section narrow">
+<a href="{{ url_for('organizer') }}">← Mes activités</a>
+<h1>Participants</h1>
+<h2>{{ event.title }}</h2>
+<p>{{ people|length }} inscription(s) confirmée(s) / {{ event.capacity }} places</p>
+<div class="panel">
+{% for p in people %}
+<p>
+<strong>{{ p.display_name }}</strong> · Inscription le {{ p.reserved_at|datefr }}</p>
+{% else %}
+<p>Aucune inscription pour le moment.</p>
+{% endfor %}
+</div>
+</section>
+{% endblock %}

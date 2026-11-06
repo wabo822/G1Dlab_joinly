@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Explorer les activités — Joinly{% endblock %}
+{% block content %}
+<section class="container section">
+<p class="eyebrow">SORTEZ DU QUOTIDIEN</p>
+<h1>Trouvez votre prochain bon moment.</h1>
+<form class="filters panel" method="get">
+<label>Une envie ?<input name="q" placeholder="Randonnée, jeux, cuisine…" value="{{ request.args.get('q','') }}">
+</label>
+<label>Lieu<input name="location" placeholder="Ville ou lieu" value="{{ request.args.get('location','') }}">
+</label>
+<label>Catégorie<select name="category">
+<option value="">Toutes</option>
+{% for c in categories %}
+<option value="{{ c.id }}" {% if request.args.get('category') == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+{% endfor %}
+</select>
+</label>
+<label>Du<input type="date" name="from" value="{{ request.args.get('from','') }}">
+</label>
+<label>Au<input type="date" name="to" value="{{ request.args.get('to','') }}">
+</label>
+<div class="actions">
+<button>Rechercher</button>
+<a href="{{ url_for('activities') }}">Réinitialiser</a>
+</div>
+</form>
+<div class="section-head">
+<h2>À découvrir</h2>
+<span>{{ events|length }} activité(s) sur cette page</span>
+</div>
+{% include '_cards.html' %}
+<nav class="actions pagination" aria-label="Pagination">
+{% set page=request.args.get('page','1')|int %}
+{% if page > 1 %}
+<a href="{{ url_for('activities',q=request.args.get('q',''),location=request.args.get('location',''),category=request.args.get('category',''),from=request.args.get('from',''),to=request.args.get('to',''),page=page-1) }}">← Précédent</a>
+{% endif %}
+{% if events|length == 60 %}
+<a href="{{ url_for('activities',q=request.args.get('q',''),location=request.args.get('location',''),category=request.args.get('category',''),from=request.args.get('from',''),to=request.args.get('to',''),page=page+1) }}">Suivant →</a>
+{% endif %}
+</nav>
+</section>
+{% endblock %}

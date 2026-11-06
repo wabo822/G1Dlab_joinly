@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section narrow">
+<p class="eyebrow">ON VOUS ACCOMPAGNE</p>
+<h1>Vos questions, nos réponses.</h1>
+{% for faq in faqs %}
+<details class="panel">
+<summary>{{ faq.question }}</summary>
+<p class="prose">{{ faq.answer }}</p>
+</details>
+{% else %}
+<p>La FAQ sera publiée prochainement.</p>
+{% endfor %}
+<p>Une autre question ? <a href="{{ url_for('contact') }}">Contactez-nous.</a>
+</p>
+</section>
+{% endblock %}

@@ -1,7 +1,7 @@
 # PostgreSQL — développement local
 
 PostgreSQL est le moteur retenu pour Joinly. Cette première installation utilise
-PostgreSQL 16 fourni par Ubuntu 24.04. Le backend reste à choisir et à développer.
+PostgreSQL 16 fourni par Ubuntu 24.04. Le backend Flask de la V1 utilise ce schéma ; voir `docs/developpement.md`.
 
 ## Installation sur une machine Ubuntu vierge
 
@@ -61,21 +61,17 @@ fin après début, cohérence annulation/date et unicité d'une réservation act
 par membre et événement. Les événements avec historique ne peuvent pas être
 supprimés. Les champs `updated_at` sont entretenus par des déclencheurs.
 
-**Le schéma seul ne constitue pas un système de réservation prêt à utiliser.**
-Avant d'exposer une API, implémenter et tester les règles RG01–RG12 restantes :
-contrôle des rôles et comptes suspendus, confidentialité, réservation avant le
-début d'un événement publié, limites de capacité, annulation avant le début,
-annulation cohérente des inscriptions, interdiction des changements de date/lieu
-après inscription. Les droits du compte SQL sont des droits techniques ; les
-permissions de chaque membre doivent être vérifiées par le backend.
+Les règles RG01–RG12 sont désormais appliquées par le backend Flask : contrôle
+des comptes et rôles, confidentialité, activité publiée future, limites de
+capacité, annulation et protection des dates/lieux après inscription.
 
-Pour RG06–RG10, toutes les opérations de réservation et de modification de
-capacité doivent verrouiller la même ligne d'événement (`SELECT ... FOR UPDATE`)
-dans une transaction ; vérifier ensuite disponibilité et inscriptions actives
-avant écriture. Prévoir un test concurrent sur la dernière place. Ne pas traiter
-une simple lecture du nombre de places suivie d'un INSERT comme sûre.
+Toutes les mutations de réservation et de capacité verrouillent la même ligne
+d’événement avec `SELECT ... FOR UPDATE`, dans une transaction. Les tests de la
+V1 vérifient la dernière place et l’annulation concurrente. Ces garanties métier
+ne sont pas imposées à un administrateur écrivant directement en SQL.
 
-Le contact avec stockage, les paiements et l'historique IA restent hors schéma.
+La migration `002_web` ajoute sessions, demandes de contact, limites de débit et
+jetons de réinitialisation. Les paiements et l’historique IA restent hors schéma.
 
 ## Vérification et migrations
 
@@ -89,8 +85,8 @@ ses données de test à la fin. Les séquences peuvent néanmoins avancer.
 
 `001_initial.sql` s'applique une seule fois à une base vide et dans une transaction.
 Pour toute évolution, ajouter une nouvelle migration numérotée, exécutée comme
-propriétaire via l'administrateur local, puis enregistrer sa version. Aucun moteur
-automatique de migrations n'est encore intégré. Ne pas modifier rétroactivement
+propriétaire via l'administrateur local, puis enregistrer sa version. `scripts/migrate.py` applique les migrations
+absentes via l’administrateur local. Ne pas modifier rétroactivement
 une migration déjà appliquée.
 
 ## Sauvegarde manuelle

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="container section">
+<div class="auth panel">
+<p class="eyebrow">BIENVENUE CHEZ JOINLY</p>
+<h1>{{ {'login':'Heureux de vous revoir.','signup':'Les rencontres commencent ici.','forgot':'Un nouveau départ.','reset':'Votre nouveau mot de passe.'}[mode] }}</h1>
+{% if mode == 'forgot' and not configured %}
+<p>La réinitialisation par e-mail sera disponible après la configuration de l’envoi d’e-mails.</p>
+<a href="{{ url_for('contact') }}">Contacter l’équipe</a>
+{% else %}
+<form method="post" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% if mode == 'signup' %}
+<label>Votre nom affiché<input name="display_name" autocomplete="nickname" maxlength="100" required>
+</label>
+{% endif %}
+{% if mode != 'reset' %}
+<label>Adresse e-mail<input type="email" name="email" autocomplete="email" maxlength="254" required>
+</label>
+{% endif %}
+{% if mode != 'forgot' %}
+<label>Mot de passe<input type="password" name="password" autocomplete="{{ 'current-password' if mode=='login' else 'new-password' }}" {% if mode != 'login' %}minlength="12"{% endif %} maxlength="128" required>
+</label>
+{% if mode != 'login' %}
+<small>12 caractères minimum. Utilisez une phrase de passe unique.</small>
+{% endif %}
+{% endif %}
+{% if mode == 'signup' %}
+<label>Je souhaite<select name="role">
+<option value="member">Participer aux activités</option>
+<option value="organizer">Participer et organiser des activités</option>
+</select>
+</label>
+<p class="muted">Consultez nos <a href="{{ url_for('legal',kind='terms') }}">conditions d’utilisation</a> avant de créer votre compte.</p>
+{% endif %}
+<button>{{ {'login':'Se connecter','signup':'Créer mon compte','forgot':'Recevoir un lien','reset':'Changer mon mot de passe'}[mode] }}</button>
+</form>
+{% endif %}
+{% if mode == 'login' %}
+<p>
+<a href="{{ url_for('forgot_password') }}">Mot de passe oublié ?</a>
+</p>
+<p>Pas encore membre ? <a href="{{ url_for('signup') }}">Créer un compte</a>
+</p>
+{% elif mode == 'signup' %}
+<p>Déjà membre ? <a href="{{ url_for('login') }}">Se connecter</a>
+</p>
+{% endif %}
+</div>
+</section>
+{% endblock %}
