@@ -38,14 +38,16 @@
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Nom affiché<input name="display_name" maxlength="100" value="{{ g.user.display_name }}" required>
 </label>
-<label>Centres d’intérêt<input name="interests" maxlength="500" value="{{ preferences.interests|join(', ') if preferences else '' }}" placeholder="Nature, cuisine, jeux">
-</label>
+<fieldset class="interest-fieldset">
+<legend>Centres d’intérêt{% if interest_minimum %} — {{ interest_minimum }} minimum{% else %} — facultatif pour l’administration{% endif %}</legend>
+{% include '_interests.html' %}
+</fieldset>
 <label>Zone préférée<input name="chosen_area" maxlength="150" value="{{ preferences.chosen_area or '' if preferences else '' }}">
 </label>
 <label class="check">
 <input type="checkbox" name="assistant_consent" {% if preferences and preferences.assistant_consent %}checked{% endif %}>Autoriser le futur assistant à utiliser mes préférences</label>
 <small>Préférences privées. L’assistant IA n’est pas activé dans cette version.</small>
-<button>Enregistrer mon profil</button>
+<button data-interest-submit>Enregistrer mon profil</button>
 </form>
 <hr>
 <details>

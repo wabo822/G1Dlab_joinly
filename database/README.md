@@ -72,7 +72,10 @@ ne sont pas imposées à un administrateur écrivant directement en SQL.
 
 La migration `002_web` ajoute sessions, demandes de contact, limites de débit et
 jetons de réinitialisation. La migration `003_privacy` autorise le type
-`privacy` dans `legal_pages`. Les paiements et l’historique IA restent hors schéma.
+`privacy` dans `legal_pages`. La migration `004_interests_pricing` ajoute
+`categories.icon`, la table `user_interests`, `events.price_cents` (0 = gratuit)
+et `events.view_count`. L’encaissement réel et l’historique IA restent hors schéma :
+l’application ne fait que simuler la confirmation d’un prix.
 
 ## Vérification et migrations
 

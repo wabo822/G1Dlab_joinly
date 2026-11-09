@@ -6,6 +6,7 @@ import smtplib
 import ssl
 import unicodedata
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
@@ -33,7 +34,9 @@ LEGAL_TITLES = {
     'legal_notice': 'Mentions légales',
     'privacy': 'Politique de confidentialité',
 }
-PUBLIC_PATHS = ('/', '/activities', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
+PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
+MIN_INTERESTS = 3
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health'}
 
 
 def create_app(config=None):
@@ -91,6 +94,16 @@ def create_app(config=None):
                 g.roles = {r['name'] for r in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (g.user['id'],))}
             else:
                 session.clear()
+
+    def interest_total(user_id):
+        return query('SELECT count(*) AS n FROM user_interests WHERE user_id=%s', (user_id,), True)['n']
+
+    @app.before_request
+    def require_interests():
+        if not g.user or 'admin' in g.roles or request.endpoint in INTEREST_FREE:
+            return
+        if interest_total(g.user['id']) < MIN_INTERESTS:
+            return redirect(url_for('interests'))
 
     @app.after_request
     def headers(response):
@@ -192,6 +205,63 @@ def create_app(config=None):
     def timefr(value):
         return value.astimezone(PARIS).strftime('%H:%M') if value else ''
 
+    @app.template_filter('pricefr')
+    def pricefr(cents):
+        cents = int(cents or 0)
+        if cents <= 0:
+            return 'Gratuit'
+        euros, centimes = divmod(cents, 100)
+        if centimes:
+            return f'{euros},{centimes:02d} €'
+        return f'{euros} €'
+
+    def money_cents(name='price'):
+        raw = (request.form.get(name) or '').strip().replace(' ', '').replace('€', '').replace(',', '.')
+        if not raw:
+            raw = '0'
+        try:
+            value = Decimal(raw)
+        except InvalidOperation:
+            raise ValueError('Indiquez un prix en euros, par exemple 12,50. 0 signifie gratuit.')
+        if value < 0 or value > Decimal('5000'):
+            raise ValueError('Le prix doit être compris entre 0 et 5000 euros.')
+        quantized = value.quantize(Decimal('0.01'))
+        if quantized != value:
+            raise ValueError('Le prix ne peut pas avoir plus de deux décimales.')
+        return int(quantized * 100)
+
+    def chosen_interest_ids(minimum):
+        raw = request.form.getlist('interest_ids')
+        if len(raw) > 20:
+            raise ValueError('Vous pouvez sélectionner au plus 20 centres d’intérêt.')
+        ids = []
+        for value in raw:
+            if not value.isdigit() or int(value) < 1:
+                raise ValueError('Centre d’intérêt invalide.')
+            ids.append(int(value))
+        ids = list(dict.fromkeys(ids))
+        if len(ids) < minimum:
+            raise ValueError('Choisissez au moins 3 centres d’intérêt.')
+        if ids:
+            found = query('SELECT id FROM categories WHERE id = ANY(%s)', (ids,))
+            if len(found) != len(ids):
+                raise ValueError('Centre d’intérêt inconnu.')
+        return ids
+
+    def replace_interests(user_id, category_ids):
+        names = [row['name'] for row in query('SELECT name FROM categories WHERE id = ANY(%s) ORDER BY name', (category_ids,))] if category_ids else []
+        db().execute('DELETE FROM user_interests WHERE user_id=%s', (user_id,))
+        if category_ids:
+            db().execute(
+                'INSERT INTO user_interests(user_id, category_id) SELECT %s, id FROM categories WHERE id = ANY(%s)',
+                (user_id, category_ids),
+            )
+        db().execute(
+            '''INSERT INTO member_preferences(user_id, interests) VALUES (%s, %s)
+               ON CONFLICT (user_id) DO UPDATE SET interests=EXCLUDED.interests''',
+            (user_id, names),
+        )
+
     def slugify(value):
         normalized = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode()
         slug = re.sub(r'[^a-z0-9]+', '-', normalized.lower()).strip('-')
@@ -229,9 +299,58 @@ def create_app(config=None):
             'legal_titles': LEGAL_TITLES,
         }
 
-    event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category,
+    event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
         e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available
         FROM events e JOIN users u ON u.id=e.organizer_id LEFT JOIN categories c ON c.id=e.category_id'''
+
+    def ranked_events(limit=30):
+        rows = query(
+            event_select.replace('SELECT e.*,', '''SELECT e.*, (
+                (SELECT count(*) FROM reservations r
+                    WHERE r.event_id=e.id AND r.status='confirmed' AND r.reserved_at > now() - interval '30 days') * 10
+                + COALESCE((SELECT (count(*) FILTER (WHERE r.status='confirmed') * 100) / NULLIF(e.capacity, 0)
+                    FROM reservations r WHERE r.event_id=e.id), 0)
+                + LEAST(e.view_count, 400)
+            ) AS heat,''', 1)
+            + " WHERE e.status='published' AND e.starts_at>now() ORDER BY heat DESC, e.starts_at, e.id LIMIT %s",
+            (limit,),
+        )
+        for index, row in enumerate(rows, 1):
+            row['rank'] = index
+        return rows
+
+    def recommendations(limit=6):
+        rows = []
+        if g.user:
+            rows = query(
+                event_select + ''' WHERE e.status='published' AND e.starts_at>now()
+                AND e.category_id IN (SELECT category_id FROM user_interests WHERE user_id=%s)
+                ORDER BY ((SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') >= e.capacity),
+                         e.starts_at, e.id
+                LIMIT %s''',
+                (g.user['id'], limit),
+            )
+        personal = bool(rows)
+        if rows:
+            return rows, personal
+        rows = query(
+            event_select + ''' WHERE e.id IN (
+                SELECT DISTINCT ON (category_id) id FROM events
+                WHERE status='published' AND starts_at>now() AND category_id IS NOT NULL
+                ORDER BY category_id, starts_at, id
+            ) ORDER BY e.starts_at, e.id LIMIT %s''',
+            (limit,),
+        )
+        if len(rows) < limit:
+            chosen = [row['id'] for row in rows]
+            clause = " AND NOT (e.id = ANY(%s))" if chosen else ''
+            args = (chosen, limit - len(rows)) if chosen else (limit - len(rows),)
+            more = query(
+                event_select + f" WHERE e.status='published' AND e.starts_at>now(){clause} ORDER BY e.starts_at, e.id LIMIT %s",
+                args,
+            )
+            rows.extend(more)
+        return rows, False
 
     def catalogue(limit=60):
         filters = ["e.status='published'", 'e.starts_at>now()']
@@ -265,7 +384,12 @@ def create_app(config=None):
 
     @app.get('/')
     def home():
-        return render_template('home.html', events=catalogue(6))
+        recommended, personal = recommendations()
+        return render_template('home.html', events=catalogue(6), recommended=recommended, personal=personal, trending=ranked_events(5))
+
+    @app.get('/classement')
+    def classement():
+        return render_template('classement.html', events=ranked_events(30))
 
     @app.get('/activities')
     def activities():
@@ -276,6 +400,9 @@ def create_app(config=None):
         event = query(event_select + ' WHERE e.id=%s', (event_id,), True)
         if not event or (event['status'] == 'draft' and (not g.user or event['organizer_id'] != g.user['id'])):
             abort(404)
+        if event['status'] == 'published':
+            db().execute('UPDATE events SET view_count=view_count+1 WHERE id=%s', (event_id,))
+            event['view_count'] += 1
         booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True) if g.user else None
         return render_template('detail.html', event=event, booking=booking)
 
@@ -289,13 +416,17 @@ def create_app(config=None):
             role = text('role')
             if role not in ('member', 'organizer'):
                 abort(400)
+            interests = chosen_interest_ids(MIN_INTERESTS)
             with db().transaction():
                 user = query('INSERT INTO users(email,display_name,password_hash) VALUES (%s,%s,%s) RETURNING id', (email, name, generate_password_hash(password)), True)
                 db().execute("INSERT INTO user_roles(user_id,role_id) SELECT %s,id FROM roles WHERE name='member' OR name=%s", (user['id'], role))
-                db().execute('INSERT INTO member_preferences(user_id) VALUES (%s)', (user['id'],))
+                replace_interests(user['id'], interests)
             flash('Compte créé. Vous pouvez vous connecter.', 'success')
             return redirect(url_for('login'))
-        return render_template('auth.html', mode='signup')
+        return render_template(
+            'auth.html', mode='signup', interest_minimum=MIN_INTERESTS, selected=[],
+            categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
+        )
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
@@ -313,6 +444,10 @@ def create_app(config=None):
             session.permanent = True
             session['auth_token'] = token
             db().execute('INSERT INTO web_sessions(token_hash,user_id,expires_at) VALUES (%s,%s,now()+interval \'12 hours\')', (digest(token), user['id']))
+            roles = {r['name'] for r in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (user['id'],))}
+            if 'admin' not in roles and interest_total(user['id']) < MIN_INTERESTS:
+                flash('Choisissez au moins 3 centres d’intérêt pour continuer.', 'info')
+                return redirect(url_for('interests'))
             return redirect(url_for('account'))
         return render_template('auth.html', mode='login')
 
@@ -323,23 +458,44 @@ def create_app(config=None):
         session.clear()
         return redirect(url_for('home'))
 
+    @app.route('/interests', methods=['GET', 'POST'])
+    @require()
+    def interests():
+        if request.method == 'POST':
+            chosen = chosen_interest_ids(MIN_INTERESTS)
+            with db().transaction():
+                replace_interests(g.user['id'], chosen)
+            flash('Centres d’intérêt enregistrés.', 'success')
+            return redirect(url_for('home'))
+        selected = {row['category_id'] for row in query('SELECT category_id FROM user_interests WHERE user_id=%s', (g.user['id'],))}
+        return render_template(
+            'interests.html', interest_minimum=MIN_INTERESTS, selected=selected,
+            categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
+        )
+
     @app.route('/account', methods=['GET', 'POST'])
     @require()
     def account():
+        minimum = 0 if 'admin' in g.roles else MIN_INTERESTS
         if request.method == 'POST':
             name = text('display_name', 100)
-            interests = [s.strip() for s in text('interests', 500, False).split(',') if s.strip()]
+            chosen = chosen_interest_ids(minimum)
             with db().transaction():
                 db().execute('UPDATE users SET display_name=%s WHERE id=%s', (name, g.user['id']))
-                db().execute('''INSERT INTO member_preferences(user_id,interests,chosen_area,assistant_consent) VALUES (%s,%s,%s,%s)
-                    ON CONFLICT(user_id) DO UPDATE SET interests=EXCLUDED.interests, chosen_area=EXCLUDED.chosen_area, assistant_consent=EXCLUDED.assistant_consent''',
-                    (g.user['id'], interests, text('chosen_area', 150, False), 'assistant_consent' in request.form))
+                replace_interests(g.user['id'], chosen)
+                db().execute('''INSERT INTO member_preferences(user_id,chosen_area,assistant_consent) VALUES (%s,%s,%s)
+                    ON CONFLICT(user_id) DO UPDATE SET chosen_area=EXCLUDED.chosen_area, assistant_consent=EXCLUDED.assistant_consent''',
+                    (g.user['id'], text('chosen_area', 150, False), 'assistant_consent' in request.form))
             flash('Profil enregistré.', 'success')
             return redirect(url_for('account'))
         prefs = query('SELECT * FROM member_preferences WHERE user_id=%s', (g.user['id'],), True)
         bookings = query('''SELECT r.*, e.title,e.starts_at,e.location FROM reservations r JOIN events e ON e.id=r.event_id
             WHERE r.member_id=%s ORDER BY e.starts_at DESC''', (g.user['id'],))
-        return render_template('account.html', preferences=prefs, bookings=bookings)
+        selected = {row['category_id'] for row in query('SELECT category_id FROM user_interests WHERE user_id=%s', (g.user['id'],))}
+        return render_template(
+            'account.html', preferences=prefs, bookings=bookings, selected=selected, interest_minimum=minimum,
+            categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
+        )
 
     @app.post('/account/security')
     @require()
@@ -369,9 +525,25 @@ def create_app(config=None):
             count = query("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (event_id,), True)['n']
             if event['status'] != 'published' or event['starts_at'] <= datetime.now(timezone.utc) or count >= event['capacity']:
                 raise ValueError('Cette activité n’a plus de place disponible ou les inscriptions sont fermées.')
+            if event['price_cents'] > 0 and request.form.get('payment_simulated') != '1':
+                raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
             db().execute('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s)', (g.user['id'], event_id))
-        flash('Votre place est réservée ! Retrouvez-la dans votre espace.', 'success')
+        if event['price_cents'] > 0:
+            flash('Paiement simulé confirmé. Votre place est réservée — aucun montant n’a été débité.', 'success')
+        else:
+            flash('Votre place est réservée ! Retrouvez-la dans votre espace.', 'success')
         return redirect(url_for('account'))
+
+    @app.get('/activities/<int:event_id>/paiement')
+    @require()
+    def simulated_payment(event_id):
+        event = query(event_select + ' WHERE e.id=%s', (event_id,), True)
+        if not event or (event['status'] == 'draft' and event['organizer_id'] != g.user['id']):
+            abort(404)
+        if event['price_cents'] <= 0:
+            return redirect(url_for('detail', event_id=event_id))
+        booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True)
+        return render_template('payment.html', event=event, booking=booking)
 
     @app.post('/reservations/<int:booking_id>/cancel')
     @require()
@@ -408,7 +580,7 @@ def create_app(config=None):
         status = text('status')
         if status not in ('draft', 'published') or starts <= datetime.now(timezone.utc):
             raise ValueError('Choisissez un état valide et une date future.')
-        return dict(title=text('title', 180), description=text('description', 10000), location=text('location', 200), starts_at=starts, ends_at=ends, capacity=capacity, category_id=category_id, status=status)
+        return dict(title=text('title', 180), description=text('description', 10000), location=text('location', 200), starts_at=starts, ends_at=ends, capacity=capacity, category_id=category_id, status=status, price_cents=money_cents())
 
     @app.route('/organizer/new', methods=['GET', 'POST'])
     @app.route('/organizer/<int:event_id>/edit', methods=['GET', 'POST'])
@@ -530,7 +702,20 @@ def create_app(config=None):
         return render_template('admin.html', users=query('''SELECT u.id,u.email,u.display_name,u.status,
             ARRAY(SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=u.id) AS roles
             FROM users u ORDER BY u.id'''), faqs=query('SELECT * FROM faqs ORDER BY sort_order,id'),
-            pages=query('SELECT * FROM legal_pages ORDER BY kind,version DESC'), messages=query('SELECT * FROM contact_requests ORDER BY created_at DESC'))
+            pages=query('SELECT * FROM legal_pages ORDER BY kind,version DESC'), messages=query('SELECT * FROM contact_requests ORDER BY created_at DESC'),
+            priced_events=query('''SELECT e.id, e.title, e.price_cents, e.starts_at, u.display_name AS organizer
+                FROM events e JOIN users u ON u.id=e.organizer_id
+                WHERE e.status <> 'cancelled' ORDER BY e.starts_at DESC LIMIT 40'''))
+
+    @app.post('/admin/events/<int:event_id>/price')
+    @require('admin')
+    def admin_event_price(event_id):
+        cents = money_cents()
+        if not query('SELECT id FROM events WHERE id=%s', (event_id,), True):
+            abort(404)
+        db().execute('UPDATE events SET price_cents=%s WHERE id=%s', (cents, event_id))
+        flash('Prix mis à jour.', 'success')
+        return redirect(url_for('admin') + '#tarifs')
 
     @app.post('/admin/users/<int:user_id>')
     @require('admin')

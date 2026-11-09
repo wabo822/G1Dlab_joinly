@@ -1,6 +1,9 @@
-"""Idempotent lived-in demonstration data. Does not delete or edit existing accounts.
+"""Idempotent lived-in demonstration data.
 
-Usage, from the repository root, after migration 003_privacy:
+Passwords and display names already stored are kept. Interests of demonstration
+accounts and prices of demonstration activities are updated.
+
+Usage, from the repository root, after migration 004_interests_pricing:
 
     .venv/bin/flask --app app seed-demo
 

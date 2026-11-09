@@ -2,20 +2,23 @@
 {% for event in events %}
 <article class="activity">
 <div class="card-art art-{{ loop.index0 % 4 }}">
-<span>{{ event.category or 'À découvrir' }}</span>
+{% if event.rank %}
+<span class="rank-badge rank-{{ event.rank if event.rank < 4 else 'n' }}"><span class="sr-only">Rang </span>{{ event.rank }}</span>
+{% endif %}
+<span>{{ event.category_icon }} {{ event.category or 'À découvrir' }}</span>
 <strong>{{ event.starts_at|daynum }}<small>{{ event.starts_at|monthfr }}</small></strong>
 <span class="art-label">{{ event.starts_at|timefr }}</span>
 </div>
 <div class="card-body">
 <div class="meta">
 <span>{{ event.category or 'Activité' }}</span>
-<span>Gratuit</span>
+<span class="{{ 'price-free' if not event.price_cents else 'price-paid' }}">{{ event.price_cents|pricefr }}</span>
 </div>
 <h3>
 <a href="{{ url_for('detail',event_id=event.id) }}">{{ event.title }}</a>
 </h3>
 <p>{{ event.location }}</p>
-<p class="muted">Avec {{ event.organizer }}</p>
+<p class="muted">Avec {{ event.organizer }}{% if event.rank %} · score {{ event.heat }}{% endif %}</p>
 {% set remaining = event.available if event.available > 0 else 0 %}
 {% set taken = event.capacity - remaining %}
 {% set ratio = (taken * 100 / event.capacity)|round|int if event.capacity else 0 %}

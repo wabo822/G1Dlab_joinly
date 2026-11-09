@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Explorer les activités — Joinly{% endblock %}
-{% block description %}Parcourez les activités gratuites à venir en Île-de-France et filtrez par mot-clé, lieu, catégorie ou date.{% endblock %}
+{% block description %}Parcourez les activités à venir en Île-de-France, gratuites ou payantes, et filtrez par mot-clé, lieu, catégorie ou date.{% endblock %}
 {% block content %}
 <section class="container section">
 <p class="eyebrow">CATALOGUE</p>
@@ -13,7 +13,7 @@
 <label>Catégorie<select name="category">
 <option value="">Toutes</option>
 {% for c in categories %}
-<option value="{{ c.id }}" {% if request.args.get('category') == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+<option value="{{ c.id }}" {% if request.args.get('category') == c.id|string %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
 {% endfor %}
 </select>
 </label>

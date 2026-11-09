@@ -4,7 +4,7 @@
 {% block robots %}noindex,follow{% endblock %}
 {% block content %}
 <section class="container section">
-<div class="auth panel">
+<div class="auth panel{% if mode == 'signup' %} auth-wide{% endif %}">
 <p class="eyebrow">BIENVENUE CHEZ JOINLY</p>
 <h1>{{ {'login':'Heureux de vous revoir.','signup':'Les rencontres commencent ici.','forgot':'Un nouveau départ.','reset':'Votre nouveau mot de passe.'}[mode] }}</h1>
 {% if mode == 'forgot' and not configured %}
@@ -34,9 +34,13 @@
 <option value="organizer">Participer et organiser des activités</option>
 </select>
 </label>
+<fieldset class="interest-fieldset">
+<legend>Centres d’intérêt — 3 minimum</legend>
+{% include '_interests.html' %}
+</fieldset>
 <p class="muted">En créant un compte, vous acceptez les <a href="{{ url_for('legal', kind='terms') }}">conditions d’utilisation</a> et reconnaissez avoir pris connaissance de la <a href="{{ url_for('legal', kind='privacy') }}">politique de confidentialité</a>.</p>
 {% endif %}
-<button>{{ {'login':'Se connecter','signup':'Créer mon compte','forgot':'Recevoir un lien','reset':'Changer mon mot de passe'}[mode] }}</button>
+<button {% if mode == 'signup' %}data-interest-submit{% endif %}>{{ {'login':'Se connecter','signup':'Créer mon compte','forgot':'Recevoir un lien','reset':'Changer mon mot de passe'}[mode] }}</button>
 </form>
 {% endif %}
 {% if mode == 'login' %}

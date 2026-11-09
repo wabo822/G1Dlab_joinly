@@ -1,0 +1,16 @@
+{% set picked = selected|default([]) %}
+<div class="interest-grid" data-interest-grid data-minimum="{{ interest_minimum|default(3) }}">
+{% for c in categories %}
+<label class="interest-chip">
+<input type="checkbox" name="interest_ids" value="{{ c.id }}" {% if c.id in picked %}checked{% endif %}>
+<span class="chip-face">
+<span class="chip-emoji" aria-hidden="true">{{ c.icon or '✨' }}</span>
+<span class="chip-name">{{ c.name }}</span>
+</span>
+</label>
+{% else %}
+<p class="muted">Aucun centre d’intérêt n’est disponible pour le moment.</p>
+{% endfor %}
+</div>
+<p class="muted" data-interest-count></p>
+<script src="{{ url_for('static', filename='interests.js') }}" defer></script>
