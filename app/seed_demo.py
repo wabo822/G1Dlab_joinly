@@ -1,8 +1,10 @@
 """Idempotent demonstration data for a lived-in Joinly catalogue.
 
-Existing accounts, including a demo address that was already present, are not
-modified. Nothing is deleted. Running the command twice does not create
-duplicates.
+Passwords, display names and roles of existing accounts are left unchanged.
+Nothing is deleted. Interests of the demonstration accounts and prices of the
+demonstration activities are refreshed, so a database that already received
+the seed picks up icons, interests and tariffs. Running the command twice
+does not create duplicates.
 """
 import hashlib
 from datetime import datetime, timedelta
@@ -24,17 +26,26 @@ DEMO_NOTE = (
     'aucun rendez-vous réel n’est organisé à cette adresse.'
 )
 
+# Keep icons aligned with database/migrations/004_interests_pricing.sql.
 CATEGORIES = (
-    'Nature & plein air',
-    'Sport',
-    'Arts & culture',
-    'Jeux & rencontres',
-    'Cuisine',
-    'Musique',
-    'Photo & vidéo',
-    'Bien-être',
-    'Langues & échanges',
-    'Bénévolat',
+    ('Nature & plein air', '🌿'),
+    ('Sport', '🏃'),
+    ('Arts & culture', '🎨'),
+    ('Jeux & rencontres', '🎲'),
+    ('Cuisine', '🍳'),
+    ('Musique', '🎵'),
+    ('Photo & vidéo', '📸'),
+    ('Bien-être', '🫧'),
+    ('Langues & échanges', '💬'),
+    ('Bénévolat', '🤝'),
+    ('Football', '⚽'),
+    ('Pique-nique', '🧺'),
+    ('Randonnée', '🥾'),
+    ('Lecture', '📚'),
+    ('Jeux vidéo', '🎮'),
+    ('Yoga', '🧘'),
+    ('Tech', '💻'),
+    ('Théâtre', '🎭'),
 )
 
 ORGANIZERS = (
@@ -82,16 +93,31 @@ MEMBERS = (
     ('pierre.colin@demo.joinly.fr', 'Pierre Colin'),
 )
 
-INTERESTS = (
-    ['randonnée', 'photo'],
-    ['cuisine', 'rencontres'],
-    ['jeux de société', 'culture'],
-    ['course à pied', 'plein air'],
-    ['musique', 'concerts'],
-    ['langues', 'cafés'],
-    ['yoga', 'bien-être'],
-    ['bénévolat', 'quartier'],
+INTEREST_SETS = (
+    ('Nature & plein air', 'Photo & vidéo', 'Randonnée'),
+    ('Cuisine', 'Jeux & rencontres', 'Pique-nique'),
+    ('Arts & culture', 'Lecture', 'Théâtre'),
+    ('Sport', 'Football', 'Bien-être'),
+    ('Musique', 'Arts & culture', 'Jeux vidéo'),
+    ('Langues & échanges', 'Cuisine', 'Tech'),
+    ('Bien-être', 'Yoga', 'Nature & plein air'),
+    ('Bénévolat', 'Pique-nique', 'Lecture'),
+    ('Tech', 'Jeux vidéo', 'Photo & vidéo'),
+    ('Théâtre', 'Musique', 'Football'),
 )
+# Euro cents. Missing titles stay free. Re-applied on every seed run.
+PAID_PRICES = {
+    'Aquarelle au square': 1800,
+    'Tartes de saison': 2800,
+    'Escalade loisir, première fois': 1500,
+    'Sushis végétariens': 3200,
+    'Initiation au bridge': 1200,
+    'Découverte du ukulélé': 2000,
+    'Yoga au parc': 800,
+    'Escape game de salon': 1600,
+    'Choux et éclairs': 3500,
+    'Badminton loisir': 600,
+}
 AREAS = (
     'Paris',
     'Boulogne-Billancourt',
@@ -221,17 +247,24 @@ def _ensure_user(conn, email, name, role, stats):
     return user_id, True
 
 
-def _preferences(conn, user_id, index):
+def _preferences(conn, user_id, index, categories):
+    names = [name for name in INTEREST_SETS[index % len(INTEREST_SETS)] if name in categories]
+    conn.execute('DELETE FROM user_interests WHERE user_id=%s', (user_id,))
+    for name in names:
+        conn.execute(
+            'INSERT INTO user_interests(user_id, category_id) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+            (user_id, categories[name]),
+        )
     conn.execute(
         '''INSERT INTO member_preferences(user_id, interests, chosen_area, assistant_consent)
            VALUES (%s, %s, %s, %s)
-           ON CONFLICT (user_id) DO NOTHING''',
-        (user_id, INTERESTS[index % len(INTERESTS)], AREAS[index % len(AREAS)], index % 5 == 0),
+           ON CONFLICT (user_id) DO UPDATE SET interests=EXCLUDED.interests''',
+        (user_id, list(names), AREAS[index % len(AREAS)], index % 5 == 0),
     )
 
 
 def seed_demo(conn):
-    """Insert demo reference data. Requires a dict_row connection and migration 003."""
+    """Insert demo reference data. Requires a dict_row connection and migration 004."""
     stats = {
         'users_created': 0,
         'events_created': 0,
@@ -242,31 +275,32 @@ def seed_demo(conn):
     with conn.transaction():
         stats['legal_published'] = publish_legal_defaults(conn, require_privacy=True)
         stats['faqs_created'] = ensure_faqs(conn)
-        for name in CATEGORIES:
-            conn.execute('INSERT INTO categories(name) VALUES (%s) ON CONFLICT DO NOTHING', (name,))
-
-        admin_id, admin_created = _ensure_user(conn, ADMIN[0], ADMIN[1], 'admin', stats)
-        if admin_created:
-            _preferences(conn, admin_id, 0)
-
-        organizer_ids = []
-        for index, (email, name) in enumerate(ORGANIZERS):
-            user_id, created = _ensure_user(conn, email, name, 'organizer', stats)
-            organizer_ids.append(user_id)
-            if created:
-                _preferences(conn, user_id, index + 1)
-
-        member_ids = []
-        for index, (email, name) in enumerate(MEMBERS):
-            user_id, created = _ensure_user(conn, email, name, 'member', stats)
-            member_ids.append(user_id)
-            if created:
-                _preferences(conn, user_id, index + 3)
-
+        for name, icon in CATEGORIES:
+            conn.execute(
+                '''INSERT INTO categories(name, icon) VALUES (%s, %s)
+                   ON CONFLICT (name) DO UPDATE SET icon=EXCLUDED.icon''',
+                (name, icon),
+            )
         categories = {
             row['name']: row['id']
             for row in conn.execute('SELECT id, name FROM categories').fetchall()
         }
+
+        admin_id, _admin_created = _ensure_user(conn, ADMIN[0], ADMIN[1], 'admin', stats)
+        _preferences(conn, admin_id, 0, categories)
+
+        organizer_ids = []
+        for index, (email, name) in enumerate(ORGANIZERS):
+            user_id, _created = _ensure_user(conn, email, name, 'organizer', stats)
+            organizer_ids.append(user_id)
+            _preferences(conn, user_id, index + 1, categories)
+
+        member_ids = []
+        for index, (email, name) in enumerate(MEMBERS):
+            user_id, _created = _ensure_user(conn, email, name, 'member', stats)
+            member_ids.append(user_id)
+            _preferences(conn, user_id, index + 3, categories)
+
         bookable = member_ids + organizer_ids
 
         for index, activity in enumerate(ACTIVITIES):
@@ -285,11 +319,18 @@ def seed_demo(conn):
                 description = f'{pitch}\n\n{PRACTICAL[category]}\n\n{DEMO_NOTE}'
                 event_id = conn.execute(
                     '''INSERT INTO events(organizer_id, category_id, title, description, location,
-                       starts_at, ends_at, capacity, status)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id''',
-                    (organizer_id, categories[category], title, description, location, starts, ends, capacity, status),
+                       starts_at, ends_at, capacity, status, price_cents)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id''',
+                    (
+                        organizer_id, categories[category], title, description, location,
+                        starts, ends, capacity, status, PAID_PRICES.get(title, 0),
+                    ),
                 ).fetchone()['id']
                 stats['events_created'] += 1
+            conn.execute(
+                'UPDATE events SET price_cents=%s WHERE id=%s',
+                (PAID_PRICES.get(title, 0), event_id),
+            )
 
             if status == 'cancelled':
                 already = conn.execute(

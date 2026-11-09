@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Joinly — Activités et rencontres en Île-de-France{% endblock %}
-{% block description %}Découvrez des activités gratuites autour de Paris, réservez votre place et proposez la vôtre. Joinly est le projet étudiant du G1D Lab à l’ISEP.{% endblock %}
+{% block description %}Découvrez des activités gratuites ou payantes autour de Paris, réservez votre place et proposez la vôtre. Joinly est le projet étudiant du G1D Lab à l’ISEP.{% endblock %}
 {% block content %}
 <section class="hero">
 <div class="container hero-grid">
@@ -38,6 +38,35 @@
 <div class="art-caption">Près de chez vous.<br>À votre rythme.</div>
 </div>
 </div>
+</section>
+<section id="recommandations" class="container section">
+<div class="section-head">
+<div>
+<p class="eyebrow">SÉLECTION</p>
+<h2>Recommandé pour vous</h2>
+{% if personal %}
+<p class="muted">Activités à venir dans vos centres d’intérêt, les complètes en dernier, puis les plus proches.</p>
+{% else %}
+<p class="muted">Un aperçu par univers. Connectez-vous et choisissez vos centres d’intérêt pour une sélection personnelle.</p>
+{% endif %}
+</div>
+</div>
+{% with events=recommended %}
+{% include '_cards.html' %}
+{% endwith %}
+</section>
+<section id="classement" class="container section">
+<div class="section-head">
+<div>
+<p class="eyebrow">TENDANCES</p>
+<h2>Classement</h2>
+<p class="muted">Réservations récentes, taux de remplissage et consultations des fiches.</p>
+</div>
+<a href="{{ url_for('classement') }}">Voir le classement →</a>
+</div>
+{% with events=trending %}
+{% include '_cards.html' %}
+{% endwith %}
 </section>
 <section class="container section">
 <div class="section-head">

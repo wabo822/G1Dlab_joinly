@@ -6,7 +6,7 @@
 <a href="{{ url_for('activities') }}">← Toutes les activités</a>
 <div class="detail-grid">
 <article>
-<p class="eyebrow">{{ event.category or 'ACTIVITÉ' }} · GRATUIT</p>
+<p class="eyebrow">{{ event.category_icon }} {{ event.category or 'ACTIVITÉ' }} · {{ event.price_cents|pricefr }}</p>
 <h1>{{ event.title }}</h1>
 <p class="lead">Proposé par {{ event.organizer }}</p>
 <div class="detail-art">
@@ -24,6 +24,8 @@
 <dd>{{ event.ends_at|datefr }}</dd>
 <dt>Lieu</dt>
 <dd>{{ event.location }}</dd>
+<dt>Tarif</dt>
+<dd>{{ event.price_cents|pricefr }}</dd>
 <dt>Places restantes</dt>
 <dd>{{ event.available if event.available > 0 else 0 }} / {{ event.capacity }}</dd>
 </dl>
@@ -39,6 +41,9 @@
 <a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
 {% elif event.available <= 0 %}
 <p class="notice">Cette activité est complète.</p>
+{% elif g.user and event.price_cents %}
+<a class="button wide" href="{{ url_for('simulated_payment', event_id=event.id) }}">Continuer · {{ event.price_cents|pricefr }}</a>
+<p class="notice">Paiement simulé — projet étudiant. Aucune carte bancaire n’est demandée.</p>
 {% elif g.user %}
 <form method="post" action="{{ url_for('reserve',event_id=event.id) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

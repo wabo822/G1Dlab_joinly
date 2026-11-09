@@ -17,7 +17,7 @@ PASSWORD = 'A sufficiently long test password'
 def app():
     application = create_app({'TESTING': True, 'DATABASE': 'joinly_test', 'SECRET_KEY': 'test-secret-not-for-deployment', 'WTF_CSRF_ENABLED': False})
     with psycopg.connect(dbname='joinly_test', autocommit=True) as db:
-        db.execute('TRUNCATE users,events,categories,faqs,legal_pages,contact_requests,rate_limits CASCADE')
+        db.execute('TRUNCATE users,events,categories,faqs,legal_pages,contact_requests,rate_limits,user_interests CASCADE')
     return application
 
 @pytest.fixture()
@@ -26,9 +26,26 @@ def db(app):
         yield connection
 
 
-def user(db, email='member@example.test', roles=('member',)):
+def ensure_categories(db):
+    samples = (('Cuisine', '🍳'), ('Musique', '🎵'), ('Sport', '🏃'), ('Photo', '📸'))
+    ids = []
+    for name, icon in samples:
+        ids.append(db.execute(
+            '''INSERT INTO categories(name, icon) VALUES (%s, %s)
+               ON CONFLICT (name) DO UPDATE SET icon=EXCLUDED.icon RETURNING id''',
+            (name, icon),
+        ).fetchone()['id'])
+    return ids
+
+
+def user(db, email='member@example.test', roles=('member',), interests=None):
     result = db.execute('INSERT INTO users(email,display_name,password_hash) VALUES (%s,%s,%s) RETURNING id', (email, email.split('@')[0], generate_password_hash(PASSWORD))).fetchone()['id']
     db.execute('INSERT INTO user_roles SELECT %s,id FROM roles WHERE name=ANY(%s)', (result,list(roles)))
+    if interests is None:
+        interests = 'admin' not in roles
+    if interests:
+        for category_id in ensure_categories(db)[:3]:
+            db.execute('INSERT INTO user_interests(user_id, category_id) VALUES (%s, %s) ON CONFLICT DO NOTHING', (result, category_id))
     return result
 
 
@@ -49,25 +66,32 @@ def event_form(db, event_id, **changes):
     form = {key: str(row[key]) for key in ('title','description','location','capacity','status','category_id')}
     for field in ('starts_at','ends_at'):
         form[field] = row[field].astimezone(ZoneInfo('Europe/Paris')).isoformat(timespec='microseconds').split('+')[0]
+    cents = row['price_cents']
+    form['price'] = f'{cents // 100},{cents % 100:02d}'
     form.update(changes)
     return form
 
 
 def test_public_pages(app):
     client = app.test_client()
-    for path in ['/', '/activities', '/faq','/contact','/login','/signup','/legal/terms','/legal/legal_notice','/forgot-password','/health']:
+    for path in ['/', '/activities', '/classement', '/faq','/contact','/login','/signup','/legal/terms','/legal/legal_notice','/forgot-password','/health']:
         assert client.get(path).status_code == 200, path
     assert client.get('/missing').status_code == 404
 
 
 def test_signup_roles_duplicates_and_password(app, db):
     client = app.test_client()
-    form = {'email':'  NEW@Example.test ', 'display_name':'New', 'password':PASSWORD, 'role':'organizer'}
+    ids = [str(category_id) for category_id in ensure_categories(db)]
+    form = {'email':'  NEW@Example.test ', 'display_name':'New', 'password':PASSWORD, 'role':'organizer', 'interest_ids': ids[:3]}
+    assert client.post('/signup', data={**form, 'interest_ids': ids[:2]}).status_code == 400
+    assert db.execute("SELECT id FROM users WHERE email='new@example.test'").fetchone() is None
+    assert client.post('/signup', data={**form, 'interest_ids': ids[:2] + ['999999']}).status_code == 400
     assert client.post('/signup', data=form).status_code == 302
     row = db.execute("SELECT * FROM users WHERE email='new@example.test'").fetchone()
     assert row['password_hash'] != PASSWORD
     roles = db.execute('SELECT r.name FROM roles r JOIN user_roles ur ON r.id=ur.role_id WHERE user_id=%s',(row['id'],)).fetchall()
     assert {r['name'] for r in roles} == {'member','organizer'}
+    assert db.execute('SELECT count(*) AS n FROM user_interests WHERE user_id=%s', (row['id'],)).fetchone()['n'] == 3
     assert client.post('/signup', data=form).status_code == 409
     assert client.post('/signup', data={**form,'email':'admin@example.test','role':'admin'}).status_code == 400
     assert client.post('/signup', data={**form,'password':'short'}).status_code == 400
@@ -101,11 +125,14 @@ def test_csrf_and_headers(app):
 def test_profile_saved_and_cannot_grant_admin(app, db):
     uid = user(db)
     client = login(app)
-    assert client.post('/account',data={'display_name':'<script>alert(1)</script>','interests':'Nature, Jeux','chosen_area':'Paris','roles':'admin'}).status_code == 302
+    ids = [str(row['id']) for row in db.execute('SELECT id FROM categories ORDER BY id').fetchall()]
+    assert client.post('/account',data={'display_name':'<script>alert(1)</script>','interest_ids':ids[:1],'chosen_area':'Paris','roles':'admin'}).status_code == 400
+    assert client.post('/account',data={'display_name':'<script>alert(1)</script>','interest_ids':ids[:3],'chosen_area':'Paris','roles':'admin'}).status_code == 302
     html = client.get('/account').text
     assert '&lt;script&gt;' in html and '<script>alert' not in html
     assert client.get('/admin').status_code == 403
     assert db.execute('SELECT assistant_consent FROM member_preferences WHERE user_id=%s',(uid,)).fetchone()['assistant_consent'] is False
+    assert db.execute('SELECT count(*) AS n FROM user_interests WHERE user_id=%s', (uid,)).fetchone()['n'] == 3
 
 
 def test_catalogue_filters_and_private_drafts(app, db):
@@ -381,6 +408,134 @@ def test_seed_demo_is_idempotent_and_keeps_existing_accounts(app, db):
     assert 'Balade commentée au Luxembourg' in app.test_client().get('/activities').text
     draft = db.execute("SELECT id FROM events WHERE title='Atelier calligraphie latine'").fetchone()['id']
     assert app.test_client().get(f'/activities/{draft}').status_code == 404
+    assert db.execute("SELECT count(*) AS n FROM events WHERE price_cents > 0").fetchone()['n'] == 10
+    assert db.execute("SELECT icon FROM categories WHERE name='Musique'").fetchone()['icon'] == '🎵'
+    assert db.execute("SELECT icon FROM categories WHERE name='Pique-nique'").fetchone()['icon'] == '🧺'
+    assert db.execute(
+        """SELECT count(*) AS n FROM user_interests ui JOIN users u ON u.id=ui.user_id
+           WHERE u.email='lea.moreau@demo.joinly.fr'"""
+    ).fetchone()['n'] >= 3
+    assert db.execute(
+        """SELECT count(*) AS n FROM user_interests ui JOIN users u ON u.id=ui.user_id
+           WHERE u.email='kept@example.test'"""
+    ).fetchone()['n'] == 3
+    db.execute("UPDATE events SET price_cents=1 WHERE title='Yoga au parc'")
+    third = seed_demo(db)
+    assert third['events_created'] == 0
+    assert third['users_created'] == 0
+    assert db.execute("SELECT price_cents FROM events WHERE title='Yoga au parc'").fetchone()['price_cents'] == 800
+    assert member.get('/').status_code == 200
+    assert 'Recommandé pour vous' in member.get('/').text
+
+
+def test_interest_gate_blocks_members_and_lets_admins_skip(app, db):
+    user(db, interests=False)
+    ids = [str(category_id) for category_id in ensure_categories(db)]
+    client = login(app)
+    account = client.get('/account')
+    assert account.status_code == 302 and account.headers['Location'].endswith('/interests')
+    assert client.get('/activities').status_code == 302
+    picker = client.get('/interests')
+    assert picker.status_code == 200
+    assert '🍳' in picker.text and 'Cuisine' in picker.text
+    assert 'Passer cette étape' not in picker.text
+    assert client.post('/interests', data={'interest_ids': ids[:2]}).status_code == 400
+    assert db.execute("SELECT count(*) AS n FROM user_interests").fetchone()['n'] == 0
+    assert client.post('/interests', data={'interest_ids': ids[:3]}).status_code == 302
+    assert client.get('/account').status_code == 200
+    assert client.post('/account', data={'display_name': 'member', 'interest_ids': ids[:2], 'chosen_area': ''}).status_code == 400
+    user(db, 'admin@example.test', ('member', 'admin'), interests=False)
+    admin = login(app, 'admin@example.test')
+    assert admin.get('/account').status_code == 200
+    assert admin.get('/admin').status_code == 200
+    assert 'Passer cette étape' in admin.get('/interests').text
+
+
+def test_recommendations_match_interests(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    member_id = user(db, 'fan@example.test')
+    cuisine = db.execute("SELECT id FROM categories WHERE name='Cuisine'").fetchone()['id']
+    music = db.execute("SELECT id FROM categories WHERE name='Musique'").fetchone()['id']
+    photo = db.execute("SELECT id FROM categories WHERE name='Photo'").fetchone()['id']
+    sport = db.execute("SELECT id FROM categories WHERE name='Sport'").fetchone()['id']
+    db.execute('DELETE FROM user_interests WHERE user_id=%s', (member_id,))
+    for category_id in (cuisine, music, photo):
+        db.execute('INSERT INTO user_interests(user_id, category_id) VALUES (%s, %s)', (member_id, category_id))
+    soup = event(db, owner)
+    run = event(db, owner)
+    db.execute("UPDATE events SET title='Atelier soupe', category_id=%s WHERE id=%s", (cuisine, soup))
+    db.execute("UPDATE events SET title='Footing dimanche', category_id=%s WHERE id=%s", (sport, run))
+    html = login(app, 'fan@example.test').get('/').text
+    block = html.split('id="recommandations"', 1)[1].split('id="classement"', 1)[0]
+    assert 'Atelier soupe' in block
+    assert 'Footing dimanche' not in block
+    assert 'vos centres d’intérêt' in block
+    anon = app.test_client().get('/').text
+    fallback = anon.split('id="recommandations"', 1)[1].split('id="classement"', 1)[0]
+    assert 'Atelier soupe' in fallback and 'Footing dimanche' in fallback
+    assert 'Connectez-vous' in fallback
+
+
+def test_ranking_uses_heat_and_shows_badges(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    members = [user(db, f'fan{i}@example.test') for i in range(8)]
+    calm = event(db, owner, 10)
+    viewed = event(db, owner, 10)
+    popular = event(db, owner, 10)
+    db.execute("UPDATE events SET title='Calme' WHERE id=%s", (calm,))
+    db.execute("UPDATE events SET title='Consultée', view_count=40 WHERE id=%s", (viewed,))
+    db.execute("UPDATE events SET title='Populaire' WHERE id=%s", (popular,))
+    for member in members:
+        db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (member, popular))
+    page = app.test_client().get('/classement').text
+    assert page.index('Populaire') < page.index('Consultée') < page.index('Calme')
+    assert 'rank-badge rank-1' in page and 'rank-badge rank-2' in page and 'rank-badge rank-3' in page
+    home = app.test_client().get('/').text
+    section = home.split('id="classement"', 1)[1]
+    assert 'Populaire' in section and 'rank-badge rank-1' in section
+
+
+def test_view_counter_on_published_detail(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    public = event(db, owner)
+    draft = event(db, owner, status='draft')
+    client = app.test_client()
+    assert client.get(f'/activities/{public}').status_code == 200
+    assert client.get(f'/activities/{public}').status_code == 200
+    assert db.execute('SELECT view_count FROM events WHERE id=%s', (public,)).fetchone()['view_count'] == 2
+    assert login(app, 'owner@example.test').get(f'/activities/{draft}').status_code == 200
+    assert db.execute('SELECT view_count FROM events WHERE id=%s', (draft,)).fetchone()['view_count'] == 0
+
+
+def test_paid_activity_simulated_payment_and_admin_price(app, db):
+    owner = user(db, roles=('member', 'organizer'))
+    user(db, 'payer@example.test')
+    user(db, 'admin@example.test', ('member', 'admin'), interests=False)
+    eid = event(db, owner, 5)
+    organizer = login(app)
+    assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, price='12,50')).status_code == 302
+    assert db.execute('SELECT price_cents FROM events WHERE id=%s', (eid,)).fetchone()['price_cents'] == 1250
+    assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, price='-1')).status_code == 400
+    assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, price='12.555')).status_code == 400
+    public = app.test_client().get(f'/activities/{eid}')
+    assert '12,50 €' in public.text
+    assert '12,50 €' in app.test_client().get('/activities').text
+    payer = login(app, 'payer@example.test')
+    assert payer.post(f'/activities/{eid}/reserve').status_code == 400
+    payment = payer.get(f'/activities/{eid}/paiement')
+    assert payment.status_code == 200
+    assert 'Paiement simulé — projet étudiant' in payment.text
+    assert 'name="card"' not in payment.text and 'name="cvv"' not in payment.text and 'name="pan"' not in payment.text
+    assert payer.post(f'/activities/{eid}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (eid,)).fetchone()['n'] == 1
+    free = event(db, owner, 5)
+    assert payer.post(f'/activities/{free}/reserve').status_code == 302
+    assert payer.get(f'/activities/{free}/paiement').status_code == 302
+    admin = login(app, 'admin@example.test')
+    assert admin.post(f'/admin/events/{free}/price', data={'price': '9'}).status_code == 302
+    assert db.execute('SELECT price_cents FROM events WHERE id=%s', (free,)).fetchone()['price_cents'] == 900
+    assert '9 €' in app.test_client().get(f'/activities/{free}').text
+    assert payer.get(f'/activities/{free}/paiement').status_code == 200
 
 
 def test_trusted_proxy_https_forms_and_hosts(app):

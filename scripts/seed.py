@@ -22,8 +22,12 @@ args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 load_dotenv(root / '.env')
 with psycopg.connect(row_factory=dict_row) as db:
-    for category in CATEGORIES:
-        db.execute('INSERT INTO categories(name) VALUES (%s) ON CONFLICT DO NOTHING', (category,))
+    for name, icon in CATEGORIES:
+        db.execute(
+            '''INSERT INTO categories(name, icon) VALUES (%s, %s)
+               ON CONFLICT (name) DO UPDATE SET icon=EXCLUDED.icon''',
+            (name, icon),
+        )
     ensure_faqs(db)
     published = publish_legal_defaults(db, require_privacy=False)
     if published:

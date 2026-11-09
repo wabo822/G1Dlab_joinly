@@ -10,6 +10,7 @@
 <a href="#faq">FAQ</a>
 <a href="#legal">Pages légales</a>
 <a href="#contact">Messages</a>
+<a href="#tarifs">Tarifs</a>
 </nav>
 <h2 id="users">Comptes et droits</h2>
 <div class="admin-grid">
@@ -88,5 +89,23 @@
 <p>Les messages envoyés depuis le formulaire de contact apparaîtront ici.</p>
 </div>
 {% endfor %}
+<h2 id="tarifs">Tarifs des activités</h2>
+<p>Le prix est en euros. 0 signifie gratuit. Le paiement des activités payantes reste simulé : aucune carte n’est enregistrée.</p>
+<div class="admin-grid">
+{% for e in priced_events %}
+<form class="panel stack" method="post" action="{{ url_for('admin_event_price', event_id=e.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<strong><a href="{{ url_for('detail', event_id=e.id) }}">{{ e.title }}</a></strong>
+<span>{{ e.organizer }} · {{ e.starts_at|datefr }} · {{ e.price_cents|pricefr }}</span>
+<label>Prix en euros<input name="price" inputmode="decimal" maxlength="8" value="{{ e.price_cents // 100 }},{{ '%02d'|format(e.price_cents % 100) }}" required>
+</label>
+<button class="secondary small">Enregistrer le prix</button>
+</form>
+{% else %}
+<div class="empty">
+<h3>Aucune activité à tarifer.</h3>
+</div>
+{% endfor %}
+</div>
 </section>
 {% endblock %}

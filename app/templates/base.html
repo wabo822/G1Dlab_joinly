@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Joinly — Activités et rencontres{% endblock %}</title>
-<meta name="description" content="{% block description %}Joinly réunit des habitants d’Île-de-France autour d’activités gratuites. Découvrez une sortie, réservez votre place et organisez la vôtre.{% endblock %}">
+<meta name="description" content="{% block description %}Joinly réunit des habitants d’Île-de-France autour d’activités gratuites ou payantes. Découvrez une sortie, réservez votre place et organisez la vôtre.{% endblock %}">
 <meta name="robots" content="{% block robots %}index,follow{% endblock %}">
 <link rel="canonical" href="{{ canonical_url }}">
 <meta property="og:type" content="website">
@@ -28,6 +28,7 @@
 </a>
 <div class="navlinks">
 <a href="{{ url_for('activities') }}">Explorer</a>
+<a href="{{ url_for('classement') }}">Tendances</a>
 <a href="{{ url_for('faq') }}">Comment ça marche</a>
 {% if 'organizer' in g.roles %}
 <a href="{{ url_for('organizer') }}">Organiser</a>

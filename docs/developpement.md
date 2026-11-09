@@ -37,7 +37,8 @@ applique les migrations avec le rôle propriétaire.
 
 ## Contenu initial et administrateur
 
-Appliquer d’abord les migrations, dont `003_privacy` (politique de confidentialité) :
+Appliquer d’abord les migrations, dont `003_privacy` (politique de confidentialité)
+et `004_interests_pricing` (icônes, centres d’intérêt, prix en centimes, compteur de consultations) :
 
 ```bash
 sudo python3 scripts/migrate.py
@@ -66,9 +67,17 @@ les sessions existantes.
 
 `flask seed-demo` ajoute environ 40 comptes `@demo.joinly.fr`, une cinquantaine
 d’activités en Île-de-France et des inscriptions. Il ne supprime rien et ne
-modifie pas un compte déjà présent, même si l’adresse est dans la liste de
-démonstration. Le relancer ne crée pas de doublon. Les mots de passe et le
-détail des comptes sont dans [docs/demo-accounts.md](demo-accounts.md).
+change pas le mot de passe, le nom ou les rôles d’un compte déjà présent.
+Il met à jour les centres d’intérêt des comptes de démonstration et le prix
+des activités de démonstration (dix sont payantes, le reste est gratuit).
+Le relancer ne crée pas de doublon. Les mots de passe et le détail des comptes
+sont dans [docs/demo-accounts.md](demo-accounts.md).
+
+Après la migration 004, un membre sans trois centres d’intérêt est renvoyé
+vers `/interests` et ne peut pas réserver tant qu’il n’a pas choisi. Un
+administrateur n’est pas soumis à ce passage. Une activité dont le prix est
+supérieur à 0 € exige la confirmation « Paiement simulé — projet étudiant »
+avant l’inscription. Aucune carte n’est collectée.
 
 Pour créer explicitement un administrateur supplémentaire :
 
@@ -220,8 +229,9 @@ sudo -u postgres pg_dump -Fc joinly > joinly.dump
 ```
 
 Les demandes de contact sont enregistrées et consultables dans l’administration ;
-elle ne les envoie pas automatiquement par mail. Les fonctionnalités sociales,
-paiements et assistant IA ne sont pas activés dans cette V1.
+elle ne les envoie pas automatiquement par mail. Les fonctionnalités sociales et l’assistant IA ne sont pas activés dans cette
+version. Le prix est stocké en centimes ; la réservation payante ne fait
+qu’enregistrer une confirmation simulée.
 
 ### Connecter Brevo sans exposer la clé
 

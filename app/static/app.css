@@ -904,6 +904,100 @@ hr {
     height:175px;
   }
 }
+.interest-fieldset {
+  border:0;
+  padding:0;
+  margin:0;
+}
+.interest-fieldset legend {
+  font-size:.88rem;
+  font-weight:650;
+  margin-bottom:10px;
+}
+.interest-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+  gap:12px;
+}
+.interest-chip {
+  position:relative;
+  cursor:pointer;
+  font-weight:650;
+}
+.interest-chip input {
+  position:absolute;
+  opacity:0;
+  width:1px;
+  height:1px;
+  pointer-events:none;
+}
+.chip-face {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  min-height:92px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#fff;
+  padding:14px;
+}
+.interest-chip input:checked + .chip-face {
+  border-color:var(--blue);
+  background:#eef3ff;
+  box-shadow:inset 0 0 0 1px var(--blue);
+}
+.interest-chip input:focus-visible + .chip-face {
+  outline:3px solid #7046e8;
+  outline-offset:2px;
+}
+.chip-emoji {
+  font-size:1.7rem;
+  line-height:1;
+}
+.chip-name {
+  font-size:.92rem;
+  line-height:1.3;
+}
+.auth-wide {
+  max-width:860px;
+}
+.rank-badge {
+  position:absolute;
+  z-index:2;
+  top:14px;
+  right:14px;
+  min-width:36px;
+  height:36px;
+  padding:0 8px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  font-weight:800;
+  background:#fff;
+  color:var(--ink);
+  box-shadow:0 6px 16px #11173824;
+}
+.rank-1 { background:#f6c945; }
+.rank-2 { background:#d9dce8; }
+.rank-3 { background:#e7b48a; }
+.price-paid { color:#8a4b12; }
+.price-free { color:#205936; }
+.sr-only {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  border:0;
+}
+@media(max-width:650px) {
+  .interest-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
 @media(prefers-reduced-motion:reduce) {
   * {
     transition:none!important;

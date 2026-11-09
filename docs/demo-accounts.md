@@ -5,12 +5,16 @@ adresses utilisent le domaine fictif `@demo.joinly.fr`. Les activités qu’ils
 publient le précisent dans leur description : aucun rendez-vous réel n’est
 organisé.
 
-La commande ne supprime aucune donnée et ne modifie pas un compte déjà présent
-(mot de passe, nom, rôles). Un second lancement ne crée pas de doublon.
+La commande ne supprime aucune donnée. Elle ne modifie pas le mot de passe, le
+nom affiché ni les rôles d’un compte déjà présent. Elle **réécrit** en revanche
+les centres d’intérêt des adresses `@demo.joinly.fr` et le prix des activités
+de démonstration, pour qu’une base déjà amorcée (comme la production) reçoive
+les icônes, les intérêts et les tarifs. Un second lancement ne crée pas de doublon.
 
 ## Commande
 
-Depuis la racine du dépôt, une fois la migration `003_privacy` appliquée :
+Depuis la racine du dépôt, une fois la migration `004_interests_pricing` appliquée
+(`003_privacy` doit déjà l’être) :
 
 ```bash
 .venv/bin/flask --app app seed-demo
@@ -67,9 +71,26 @@ pour tous : `Joinly-Membre-2026!`.
   la commande est lancée. Un second lancement conserve les dates déjà enregistrées.
 - Des inscriptions confirmées, en dessous ou au niveau de la capacité, pour que
   les fiches affichent des taux de remplissage variés.
+- Une icône sur chaque catégorie, et huit catégories supplémentaires utilisées
+  comme centres d’intérêt : Football, Pique-nique, Randonnée, Lecture, Jeux vidéo,
+  Yoga, Tech, Théâtre.
+- Au moins trois centres d’intérêt par compte de démonstration, repris à chaque
+  lancement. Les autres comptes ne sont pas touchés.
+- Dix activités payantes. Les autres activités de démonstration sont remises à
+  0 € (Gratuit) à chaque lancement. Il n’y a pas de table d’avis, ni de paiement réel.
 
-Il n’y a pas de tarif : le modèle des activités ne contient pas de prix. Toutes
-les activités restent gratuites. Il n’y a pas non plus de table d’avis.
+| Activité | Prix |
+| --- | --- |
+| Badminton loisir | 6 € |
+| Yoga au parc | 8 € |
+| Initiation au bridge | 12 € |
+| Escalade loisir, première fois | 15 € |
+| Escape game de salon | 16 € |
+| Aquarelle au square | 18 € |
+| Découverte du ukulélé | 20 € |
+| Tartes de saison | 28 € |
+| Sushis végétariens | 32 € |
+| Choux et éclairs | 35 € |
 
 ## À ne pas confondre
 

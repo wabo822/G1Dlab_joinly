@@ -18,9 +18,12 @@ ateliers ou activités sportives et culturelles.
 
 Une première version fonctionnelle est disponible : backend **Flask**, pages
 HTML rendues côté serveur et base **PostgreSQL 16**. Elle couvre le socle de
-priorité élevée et le parcours des activités gratuites : comptes, profils,
-recherche, inscriptions, espace organisateur, administration, FAQ, pages légales
-et contact. Les pages adaptatives et les filtres avancés sont également livrés.
+priorité élevée : comptes, profils, recherche, inscriptions, espace organisateur,
+administration, FAQ, pages légales et contact. Les pages adaptatives et les
+filtres avancés sont également livrés. L’inscription demande au moins trois
+centres d’intérêt. La page d’accueil propose « Recommandé pour vous » et un
+classement « Tendances ». Une activité peut être gratuite ou avoir un prix en
+euros ; le paiement est simulé, sans encaissement.
 
 Les instructions de lancement, de test et d’exploitation sont dans
 [docs/developpement.md](docs/developpement.md). La matrice des fonctionnalités
@@ -28,12 +31,16 @@ et leurs limites figurent dans [docs/recette-v1.md](docs/recette-v1.md).
 Le dossier `joinly_front/` conserve la maquette d’origine ; l’application utilise
 `app/templates/` et `app/static/`.
 
-Le chatbot, les fonctions sociales et le paiement restent des évolutions.
-La récupération du mot de passe nécessite un serveur SMTP configuré. Les pages
-légales (mentions, conditions d’utilisation, politique de confidentialité) sont
-rédigées pour ce projet étudiant. Un jeu de données de démonstration, qui ne
-modifie pas les comptes déjà présents, se charge avec `flask --app app seed-demo`.
-Les identifiants sont dans [docs/demo-accounts.md](docs/demo-accounts.md).
+Le chatbot et les fonctions sociales restent des évolutions. Le prix d’une
+activité est enregistré, mais aucun prestataire de paiement n’est branché : la
+réservation payante s’arrête sur une confirmation simulée. La récupération du
+mot de passe nécessite un serveur SMTP configuré. Les pages légales (mentions,
+conditions d’utilisation, politique de confidentialité) sont rédigées pour ce
+projet étudiant. Le journal des versions est dans [CHANGELOG.md](CHANGELOG.md).
+Un jeu de données de démonstration se charge avec `flask --app app seed-demo`.
+Il ne change pas le mot de passe d’un compte déjà présent ; il met à jour les
+centres d’intérêt et les prix des données de démonstration. Les identifiants
+sont dans [docs/demo-accounts.md](docs/demo-accounts.md).
 
 ## Objectifs
 
@@ -49,7 +56,7 @@ Les identifiants sont dans [docs/demo-accounts.md](docs/demo-accounts.md).
 | --- | --- |
 | Comptes utilisateurs | Inscription avec différents rôles utilisateurs, connexion et modification du profil. |
 | Découverte | Liste des activités et recherche par mots-clés ; recherche multicritère selon l'avancement. |
-| Détail d'une activité | Description, date, lieu, organisateur et places disponibles. |
+| Détail d'une activité | Description, date, lieu, organisateur, prix (ou Gratuit) et places disponibles. |
 | Réservations | Inscription à une activité, annulation et consultation de ses réservations. |
 | Organisation | Création et modification d'événements, gestion des capacités et des participants. |
 | Interface | Page d'accueil ; adaptation responsive aux écrans d'ordinateur et de mobile selon l'avancement. |
@@ -102,8 +109,10 @@ le budget et les règles de conservation restent à définir.
 
 ## Modèle économique envisagé
 
-Les pistes suivantes restent à valider avec le tuteur et le client ; elles ne
-sont pas encore implémentées. Les tarifs et commissions restent à définir.
+Les pistes suivantes restent à valider avec le tuteur et le client. Le catalogue
+peut déjà afficher un prix et une confirmation simulée ; la commission, l’abonnement
+et l’encaissement réel ne sont pas implémentés. Les tarifs et commissions restent
+à définir.
 
 | Source de revenus | Mise en œuvre dans Joinly | Qui paie / ce que gagne Joinly |
 | --- | --- | --- |
@@ -280,6 +289,8 @@ déploiement Hangar ni changement de domaine n’a été effectué dans cette ve
 - [x] Choisir Flask, Jinja et PostgreSQL pour la première version.
 - [ ] Concevoir les maquettes et le modèle de données.
 - [x] Réaliser le socle de priorité haute et le back-office, y compris les pages légales du projet étudiant.
+- [x] Demander au moins trois centres d’intérêt, recommander des activités et afficher un classement.
+- [x] Afficher un prix et une confirmation de paiement simulée, sans encaissement.
 - [x] Développer la découverte d'activités et la gestion des événements.
 - [x] Implémenter l'authentification et les réservations.
 - [ ] Intégrer le chatbot par API, ses prompts contextualisés et les recommandations.

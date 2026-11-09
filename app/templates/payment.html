@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Paiement simulé — {{ event.title }} — Joinly{% endblock %}
+{% block description %}Confirmation de réservation pour une activité payante. Aucun paiement réel n’est encaissé : projet étudiant Joinly.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section narrow">
+<a href="{{ url_for('detail', event_id=event.id) }}">← {{ event.title }}</a>
+<p class="eyebrow">PAIEMENT SIMULÉ — PROJET ÉTUDIANT</p>
+<h1>Confirmer la réservation.</h1>
+<div class="panel stack">
+<p class="notice">Paiement simulé — projet étudiant. Aucun montant n’est débité et aucune carte bancaire n’est demandée.</p>
+<h2>{{ event.title }}</h2>
+<dl>
+<dt>Tarif</dt>
+<dd>{{ event.price_cents|pricefr }}</dd>
+<dt>Début</dt>
+<dd>{{ event.starts_at|datefr }}</dd>
+<dt>Lieu</dt>
+<dd>{{ event.location }}</dd>
+</dl>
+{% if event.status != 'published' or event.starts_at <= now or event.available <= 0 %}
+<p class="notice">Cette activité n’est plus réservable.</p>
+{% elif booking %}
+<p class="notice success">Votre place est déjà réservée.</p>
+<a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
+{% else %}
+<form method="post" action="{{ url_for('reserve', event_id=event.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="payment_simulated" value="1">
+<button class="wide">Confirmer le paiement simulé · {{ event.price_cents|pricefr }}</button>
+</form>
+<p class="muted">Annulation possible avant le début de l’activité, depuis votre espace. Il n’y a pas de remboursement à traiter : le paiement n’a pas été encaissé.</p>
+{% endif %}
+</div>
+</section>
+{% endblock %}

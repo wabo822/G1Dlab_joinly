@@ -12,7 +12,7 @@
 <label>Description<textarea name="description" rows="6" maxlength="10000" required>{{ event.description if event else '' }}</textarea></label>
 <label>Catégorie<select name="category_id" required>
 {% for c in categories %}
-<option value="{{ c.id }}" {% if event and event.category_id==c.id %}selected{% endif %}>{{ c.name }}</option>
+<option value="{{ c.id }}" {% if event and event.category_id==c.id %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
 {% endfor %}
 </select>
 </label>
@@ -26,12 +26,15 @@
 </div>
 <label>Nombre de places<input type="number" name="capacity" min="1" max="100000" value="{{ event.capacity if event else 10 }}" required>
 </label>
+<label>Prix en euros<input name="price" inputmode="decimal" maxlength="8" value="{% if event %}{{ event.price_cents // 100 }},{{ '%02d'|format(event.price_cents % 100) }}{% else %}0,00{% endif %}" required>
+<small>0 = gratuit. Un prix supérieur affiche une confirmation de paiement simulé, sans encaissement.</small>
+</label>
 <label>Publication<select name="status">
 <option value="draft" {% if event and event.status=='draft' %}selected{% endif %}>Enregistrer comme brouillon</option>
 <option value="published" {% if event and event.status=='published' %}selected{% endif %}>Publier dans le catalogue</option>
 </select>
 </label>
-<p class="muted">Les activités de cette version sont gratuites. Après une inscription, les dates et le lieu ne peuvent plus être modifiés.</p>
+<p class="muted">Après une inscription, les dates et le lieu ne peuvent plus être modifiés.</p>
 <button>Enregistrer l’activité</button>
 </form>
 </section>
