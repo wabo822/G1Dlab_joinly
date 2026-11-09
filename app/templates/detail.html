@@ -10,6 +10,9 @@
 <h1>{{ event.title }}</h1>
 <p class="lead">Proposé par <a href="{{ url_for('organizer_public', user_id=event.organizer_id) }}">{{ event.organizer }}</a>{% if event.rating_count %} · {{ event.rating_avg }} ★ ({{ event.rating_count }} avis){% endif %}</p>
 <div class="detail-art">
+{% if event.cover_href %}
+<img class="cover" src="{{ event.cover_href }}" alt="">
+{% endif %}
 <span>Se retrouver.<br>Partager.<br>Recommencer.</span>
 </div>
 <h2>Au programme</h2>
@@ -79,6 +82,23 @@
 <label>Début<input type="datetime-local" name="starts_at" value="{{ event.starts_at|inputdate }}" required></label>
 <label>Fin<input type="datetime-local" name="ends_at" value="{{ event.ends_at|inputdate }}" required></label>
 <button class="secondary">Enregistrer les dates</button>
+</form>
+<form method="post" class="stack" enctype="multipart/form-data" action="{{ url_for('admin_event_cover', event_id=event.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Illustration
+<select name="cover_choice">
+<option value="auto">Automatique, selon la catégorie</option>
+{% for group in library %}
+{% if group.name == event.category %}
+{% for image in group.files %}
+<option value="{{ image.path }}" {% if event.cover_image == image.path %}selected{% endif %}>{{ group.name }} {{ image.name }}</option>
+{% endfor %}
+{% endif %}
+{% endfor %}
+</select>
+</label>
+<label>Ou envoyer un fichier<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
+<button class="secondary">Mettre à jour l’image</button>
 </form>
 {% endif %}
 </aside>

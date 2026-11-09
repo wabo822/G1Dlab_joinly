@@ -25,6 +25,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import booking_block, is_finished
+from app import covers
 
 PARIS = ZoneInfo('Europe/Paris')
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +38,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health'}
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media'}
 
 
 def _env_cutoff():
@@ -56,7 +57,9 @@ def create_app(config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', '0') == '1',
-        MAX_CONTENT_LENGTH=64 * 1024,
+        MAX_CONTENT_LENGTH=3 * 1024 * 1024,
+        UPLOAD_DIR=os.environ.get('JOINLY_UPLOAD_DIR', str(ROOT / 'instance' / 'uploads')),
+        COVER_MAX_BYTES=2 * 1024 * 1024,
         TRUST_PROXY=os.environ.get('TRUST_PROXY', '0') == '1',
         TRUSTED_HOSTS=[host.strip() for host in os.environ.get('TRUSTED_HOSTS', '').split(',') if host.strip()] or None,
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
@@ -329,7 +332,7 @@ def create_app(config=None):
         )
         for index, row in enumerate(rows, 1):
             row['rank'] = index
-        return rows
+        return covers.decorate(rows)
 
     def recommendations(limit=6):
         rows = []
@@ -344,7 +347,7 @@ def create_app(config=None):
             )
         personal = bool(rows)
         if rows:
-            return rows, personal
+            return covers.decorate(rows), personal
         rows = query(
             event_select + ''' WHERE e.id IN (
                 SELECT DISTINCT ON (category_id) id FROM events
@@ -362,7 +365,7 @@ def create_app(config=None):
                 args,
             )
             rows.extend(more)
-        return rows, False
+        return covers.decorate(rows), False
 
     def catalogue(limit=12, paginate=True):
         when = (request.args.get('when') or 'upcoming').strip()
@@ -437,6 +440,7 @@ def create_app(config=None):
             event_select + where + f' ORDER BY {orders[sort]} LIMIT %s OFFSET %s',
             (*args, limit, (page - 1) * limit if paginate else 0),
         )
+        covers.decorate(rows)
         pages = max(1, (total + limit - 1) // limit) if limit else 1
         return {'events': rows, 'total': total, 'page': page, 'pages': pages}
 
@@ -498,9 +502,11 @@ def create_app(config=None):
                 (g.user['id'], event['organizer_id']),
                 True,
             ))
+        covers.decorate([event])
+        library = covers.library_tree() if g.user and 'admin' in g.roles else []
         return render_template(
             'detail.html', event=event, booking=booking, reviews=reviews, mine=mine,
-            can_review=can_review, favorited=favorited, following=following,
+            can_review=can_review, favorited=favorited, following=following, library=library,
         )
 
     @app.post('/activities/<int:event_id>/avis')
@@ -608,6 +614,7 @@ def create_app(config=None):
             event_select + " WHERE e.organizer_id=%s AND e.status='published' ORDER BY e.starts_at DESC",
             (user_id,),
         )
+        covers.decorate(events)
         following = bool(g.user and query(
             'SELECT 1 FROM organizer_follows WHERE follower_id=%s AND organizer_id=%s',
             (g.user['id'], user_id),
@@ -709,6 +716,7 @@ def create_app(config=None):
                ORDER BY e.starts_at''',
             (g.user['id'],),
         )
+        covers.decorate(favorites)
         followed = query(
             '''SELECT u.id, u.display_name,
                       (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers
@@ -854,10 +862,31 @@ def create_app(config=None):
                 else:
                     columns = ','.join(data)
                     placeholders = ','.join(['%s'] * len(data))
-                    db().execute(f'INSERT INTO events(organizer_id,{columns}) VALUES (%s,{placeholders})', (g.user['id'], *data.values()))
+                    event_id = query(
+                        f'INSERT INTO events(organizer_id,{columns}) VALUES (%s,{placeholders}) RETURNING id',
+                        (g.user['id'], *data.values()),
+                        True,
+                    )['id']
+                    event = {'cover_image': None}
+                store_cover(event_id, event.get('cover_image') if event else None)
             flash('Activité enregistrée.', 'success')
             return redirect(url_for('organizer'))
-        return render_template('event_form.html', event=event, categories=query('SELECT * FROM categories ORDER BY name'))
+        return render_template('event_form.html', event=event, categories=query('SELECT * FROM categories ORDER BY name'), library=covers.library_tree())
+
+    def store_cover(event_id, previous):
+        uploaded = request.files.get('cover') if request.files else None
+        if uploaded and uploaded.filename:
+            name = covers.save_upload(app, event_id, uploaded, previous)
+            db().execute('UPDATE events SET cover_image=%s WHERE id=%s', (name, event_id))
+            return
+        choice = request.form.get('cover_choice', '')
+        if choice == 'auto':
+            db().execute('UPDATE events SET cover_image=NULL WHERE id=%s', (event_id,))
+            covers.delete_upload(app, previous)
+        elif choice and covers.is_library_path(choice):
+            db().execute('UPDATE events SET cover_image=%s WHERE id=%s', (choice, event_id))
+            if previous and not str(previous).startswith('covers/'):
+                covers.delete_upload(app, previous)
 
     @app.post('/organizer/<int:event_id>/cancel')
     @require('organizer')
@@ -940,6 +969,31 @@ def create_app(config=None):
     @app.get('/favicon.ico')
     def favicon():
         return send_from_directory(app.static_folder, 'favicon.svg', mimetype='image/svg+xml')
+
+    @app.get('/media/<filename>')
+    def media(filename):
+        if not re.fullmatch(r'e[0-9]+-[a-f0-9]{16}\.webp', filename):
+            abort(404)
+        directory = covers.upload_dir(app)
+        path = (directory / filename).resolve()
+        if path.parent != directory or not path.is_file():
+            abort(404)
+        return send_from_directory(directory, filename, mimetype='image/webp', max_age=86400)
+
+    @app.get('/admin/couvertures')
+    @require('admin')
+    def admin_covers():
+        return render_template('admin_covers.html', library=covers.library_tree())
+
+    @app.post('/admin/events/<int:event_id>/cover')
+    @require('admin')
+    def admin_event_cover(event_id):
+        event = query('SELECT id, cover_image FROM events WHERE id=%s', (event_id,), True)
+        if not event:
+            abort(404)
+        store_cover(event_id, event['cover_image'])
+        flash('Image de couverture mise à jour.', 'success')
+        return redirect(url_for('detail', event_id=event_id))
 
     @app.route('/contact', methods=['GET', 'POST'])
     def contact():

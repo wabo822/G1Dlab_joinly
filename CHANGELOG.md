@@ -1,5 +1,23 @@
 # Journal des modifications
 
+## 2026-11-09 — Illustrations de couverture
+
+Chaque activité a une image. Si l’organisateur n’en envoie pas, une illustration de la catégorie est choisie avec un hash stable de l’identifiant : changer de catégorie change l’image. Treize visuels originaux par catégorie (18 catégories) sont dans le dépôt. L’administrateur voit la bibliothèque et peut forcer une image, ou revenir à l’automatique.
+
+Les photos Unsplash ou Pexels n’ont pas été téléchargées : leurs API de recherche exigent une clé, et inventer les crédits aurait été faux. Le détail est dans `docs/image-credits.md`.
+
+### Fichiers
+
+- `database/migrations/008_covers.sql` — `events.cover_image`.
+- `app/covers.py`, `scripts/generate_covers.py`, `app/static/covers/**`, `docs/image-credits.md`
+- `app/__init__.py` — affichage, envoi, service `/media`, page d’administration.
+- `app/templates/event_form.html`, `_cards.html`, `detail.html`, `admin_covers.html`, `app/static/app.css`
+- `requirements.txt` — Pillow 11.3.0.
+- `deploy/joinly.service`, `deploy/isep.wangjiahan.com.nginx`, `scripts/install-service.sh`, `.env.example`, `.gitignore`
+- `tests/test_app.py`, `CHANGELOG.md`, `README.md`
+
+Les fichiers envoyés vivent dans `JOINLY_UPLOAD_DIR` (en production `/var/lib/joinly/uploads`, hors des releases). Le service a `ReadWritePaths` sur ce dossier, propriétaire `joinly:joinly`, mode 750.
+
 ## 2026-11-09 — Favoris, abonnements et profil organisateur
 
 Chaque membre peut mettre une activité en favori et suivre un organisateur. Mon espace liste « Mes favoris » et « Organisateurs suivis ». La page publique `/organisateurs/<id>` montre les activités publiées, la note moyenne et le nombre d’abonnés.

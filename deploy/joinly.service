@@ -8,6 +8,7 @@ User=joinly
 Group=joinly
 WorkingDirectory=/opt/joinly/current
 EnvironmentFile=/etc/joinly.env
+Environment=JOINLY_UPLOAD_DIR=/var/lib/joinly/uploads
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/joinly/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 --timeout 30 app:create_app()
 Restart=on-failure
@@ -16,6 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+ReadWritePaths=/var/lib/joinly/uploads
 MemoryMax=512M
 UMask=0077
 
