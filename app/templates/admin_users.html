@@ -1,0 +1,22 @@
+{% extends 'admin_base.html' %}
+{% block title %}Comptes — Administration{% endblock %}
+{% block admin %}
+<h1>Comptes</h1>
+<form method="get" class="actions">
+<input name="q" value="{{ request.args.get('q','') }}" placeholder="Nom ou e-mail">
+<select name="status"><option value="">Tous</option><option value="active">Actif</option><option value="suspended">Suspendu</option><option value="banned">Banni</option></select>
+<button>Filtrer</button>
+<a href="{{ url_for('admin_users_csv') }}">Export CSV</a>
+</form>
+<form method="post" action="{{ url_for('admin_users_bulk') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% for row in rows %}
+<p><label class="check"><input type="checkbox" name="ids" value="{{ row.id }}"> {{ row.display_name }} · {{ row.email }} · {{ row.status }}</label>
+<a href="{{ url_for('admin_user_detail', user_id=row.id) }}">Fiche</a></p>
+{% endfor %}
+<select name="action"><option value="activate">Activer</option><option value="ban">Bannir</option><option value="delete">Supprimer</option></select>
+<label class="check"><input type="checkbox" name="confirm" value="1">Je confirme</label>
+<button>Appliquer</button>
+</form>
+<p>{{ total }} comptes · page {{ page }}/{{ pages }}</p>
+{% endblock %}

@@ -647,10 +647,12 @@ def test_booking_cutoff_closes_before_the_start(app, db):
         (eid,),
     )
     app.config['BOOKING_CUTOFF_MINUTES'] = 180
+    db.execute('UPDATE site_settings SET booking_cutoff_minutes=180')
     guest = login(app, 'guest@example.test')
     assert guest.post(f'/activities/{eid}/reserve').status_code == 400
     assert 'Inscriptions closes' in guest.get(f'/activities/{eid}').text
     app.config['BOOKING_CUTOFF_MINUTES'] = 0
+    db.execute('UPDATE site_settings SET booking_cutoff_minutes=0')
     assert guest.post(f'/activities/{eid}/reserve').status_code == 302
 
 
@@ -1074,3 +1076,37 @@ def test_organizer_dashboard_sums_views_fill_and_revenue(app, db):
     assert '12' in page.text and '40 %' in page.text and '40 €' in page.text and '<svg' in page.text
     assert 'Atelier suivi' in page.text
     assert login(app, 'dash0@example.test').get('/organizer/tableau').status_code == 403
+
+
+def test_admin_office_exports_edits_and_impersonates(app, db):
+    admin_id = user(db, 'boss@example.test', ('member', 'admin'), interests=False)
+    member = user(db, 'cible@example.test')
+    owner = user(db, 'orga@example.test', roles=('member', 'organizer'))
+    eid = event(db, owner, 4)
+    db.execute("UPDATE events SET title='Sortie admin' WHERE id=%s", (eid,))
+    db.execute(
+        "INSERT INTO reviews(event_id, author_id, rating, comment) VALUES (%s, %s, 5, 'Commentaire initial.')",
+        (eid, member),
+    )
+    member_client = login(app, 'cible@example.test')
+    assert member_client.get('/admin/utilisateurs').status_code == 403
+    office = login(app, 'boss@example.test')
+    assert 'cible@example.test' in office.get('/admin/utilisateurs.csv').data.decode()
+    assert office.post('/admin/utilisateurs/bulk', data={'ids': [member], 'action': 'ban', 'confirm': '1'}).status_code == 302
+    assert db.execute('SELECT status FROM users WHERE id=%s', (member,)).fetchone()['status'] == 'banned'
+    db.execute("UPDATE users SET status='active' WHERE id=%s", (member,))
+    review_id = db.execute('SELECT id FROM reviews WHERE author_id=%s', (member,)).fetchone()['id']
+    assert office.post(f'/admin/avis/{review_id}/texte', data={'rating': '2', 'comment': 'Texte corrigé par l’admin.'}).status_code == 302
+    assert db.execute('SELECT rating, comment FROM reviews WHERE id=%s', (review_id,)).fetchone()['comment'] == 'Texte corrigé par l’admin.'
+    assert office.post('/admin/reglages', data={
+        'site_name': 'Joinly', 'banner': 'Annonce de test', 'booking_cutoff_minutes': '0',
+        'default_cancellation_policy': 'flexible', 'heat_recent_weight': '10', 'heat_fill_weight': '1', 'heat_view_cap': '400',
+        'listed_ids': [eid], 'pinned_ids': [eid],
+    }).status_code == 302
+    assert 'Annonce de test' in office.get('/').text
+    assert 'Sortie admin' in office.get('/').text
+    assert office.post(f'/admin/utilisateurs/{member}/consulter').status_code == 302
+    assert 'Consultation en tant que' in office.get('/account').text
+    assert office.post('/impersonation/stop').status_code == 302
+    assert db.execute("SELECT count(*) AS n FROM audit_log WHERE action='impersonate.start'").fetchone()['n'] == 1
+    assert 'impersonate.start' in office.get('/admin/journal').text

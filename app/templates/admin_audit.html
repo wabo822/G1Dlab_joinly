@@ -1,0 +1,6 @@
+{% extends 'admin_base.html' %}
+{% block title %}Journal — Administration{% endblock %}
+{% block admin %}
+<h1>Journal</h1>
+{% for row in rows %}<p>{{ row.created_at|datefr }} · {{ row.display_name or '—' }} · {{ row.action }} · {{ row.detail }}</p>{% else %}<p>Aucune entrée.</p>{% endfor %}
+{% endblock %}

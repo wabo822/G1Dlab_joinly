@@ -1,0 +1,38 @@
+{% extends 'admin_base.html' %}
+{% block title %}{{ person.display_name }} — Administration{% endblock %}
+{% block admin %}
+<h1>{{ person.display_name }}</h1>
+<p>{{ person.email }} · {{ person.status }} · {{ person.roles|join(', ') }}</p>
+<form method="post" action="{{ url_for('admin_user_save', user_id=person.id) }}" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Nom<input name="display_name" value="{{ person.display_name }}" required></label>
+<label>E-mail<input name="email" value="{{ person.email }}" required></label>
+<label>État<select name="status"><option value="active">Actif</option><option value="suspended">Suspendu</option><option value="banned">Banni</option></select></label>
+<label class="check"><input type="checkbox" name="roles" value="organizer" {% if 'organizer' in person.roles %}checked{% endif %}>Organisateur</label>
+<label class="check"><input type="checkbox" name="roles" value="admin" {% if 'admin' in person.roles %}checked{% endif %}>Administrateur</label>
+{% for c in categories %}<label class="check"><input type="checkbox" name="interest_ids" value="{{ c.id }}" {% if c.id in selected %}checked{% endif %}>{{ c.name }}</label>{% endfor %}
+<button>Enregistrer</button>
+</form>
+<form method="post" action="{{ url_for('admin_user_password', user_id=person.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Nouveau mot de passe<input name="password" minlength="12"></label>
+<label class="check"><input type="checkbox" name="confirm" value="1">Je confirme</label>
+<button>Réinitialiser</button>
+</form>
+<form method="post" action="{{ url_for('admin_impersonate', user_id=person.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button>Consulter en tant que cet utilisateur</button>
+</form>
+<h2>Intérêts</h2>
+{% for item in interests %}<p>{{ item.name }}</p>{% endfor %}
+<h2>Réservations</h2>
+{% for row in reservations %}<p>{{ row.title }} · {{ row.status }}</p>{% endfor %}
+<h2>Avis</h2>
+{% for row in reviews %}<p>{{ row.rating }} ★ {{ row.title }}</p>{% endfor %}
+<h2>Favoris</h2>
+{% for row in favorites %}<p>{{ row.title }}</p>{% endfor %}
+<h2>Abonnements</h2>
+{% for row in follows %}<p>{{ row.display_name }}</p>{% endfor %}
+<h2>Journal</h2>
+{% for row in history %}<p>{{ row.created_at|datefr }} · {{ row.action }} · {{ row.detail }}</p>{% endfor %}
+{% endblock %}

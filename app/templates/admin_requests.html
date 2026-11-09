@@ -1,0 +1,13 @@
+{% extends 'admin_base.html' %}
+{% block title %}Demandes organisateur{% endblock %}
+{% block admin %}
+<h1>Demandes</h1>
+{% for row in rows %}
+<form method="post" action="{{ url_for('admin_request_decide', user_id=row.user_id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<p>{{ row.display_name }} · {{ row.email }} · {{ row.status }} · {{ row.message }}</p>
+<button name="decision" value="approved">Accepter</button>
+<button name="decision" value="refused">Refuser</button>
+</form>
+{% else %}<p>Aucune demande.</p>{% endfor %}
+{% endblock %}

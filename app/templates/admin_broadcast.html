@@ -1,0 +1,12 @@
+{% extends 'admin_base.html' %}
+{% block title %}Notifications — Administration{% endblock %}
+{% block admin %}
+<h1>Message à la communauté</h1>
+<form method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Titre<input name="title" required></label>
+<label>Message<textarea name="body" required></textarea></label>
+<label>Segment<select name="segment"><option value="all">Tous</option><option value="organizers">Organisateurs</option><option value="unverified">Non confirmés</option></select></label>
+<button>Envoyer</button>
+</form>
+{% endblock %}

@@ -39,6 +39,15 @@
 </div>
 </div>
 </section>
+{% if pinned %}
+<section class="container section">
+<p class="eyebrow">À LA UNE</p>
+<h2>Sélection de l’équipe</h2>
+{% with events=pinned %}
+{% include '_cards.html' %}
+{% endwith %}
+</section>
+{% endif %}
 <section id="recommandations" class="container section">
 <div class="section-head">
 <div>

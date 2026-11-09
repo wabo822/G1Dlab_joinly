@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<div class="admin-shell">
+<aside class="admin-side" aria-label="Administration">
+<a href="{{ url_for('admin') }}">Tableau</a>
+<a href="{{ url_for('admin_users') }}">Comptes</a>
+<a href="{{ url_for('admin_events') }}">Activités</a>
+<a href="{{ url_for('admin_reservations') }}">Réservations</a>
+<a href="{{ url_for('admin') }}#avis">Avis</a>
+<a href="{{ url_for('admin_categories') }}">Catégories</a>
+<a href="{{ url_for('admin_covers') }}">Images</a>
+<a href="{{ url_for('admin') }}#faq">FAQ</a>
+<a href="{{ url_for('admin') }}#legal">Pages légales</a>
+<a href="{{ url_for('admin') }}#contact">Messages</a>
+<a href="{{ url_for('admin_broadcast') }}">Notifications</a>
+<a href="{{ url_for('admin_requests') }}">Demandes</a>
+<a href="{{ url_for('admin_audit') }}">Journal</a>
+<a href="{{ url_for('admin_settings') }}">Réglages</a>
+</aside>
+<div class="admin-main">
+{% block admin %}{% endblock %}
+</div>
+</div>
+{% endblock %}

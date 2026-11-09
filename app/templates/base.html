@@ -56,6 +56,17 @@
 </div>
 </nav>
 </header>
+{% if g.impersonating %}
+<div class="container"><p class="notice">Consultation en tant que {{ g.user.display_name }}.
+<form method="post" action="{{ url_for('stop_impersonation') }}" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="secondary small">Quitter</button>
+</form>
+</p></div>
+{% endif %}
+{% if settings and settings.banner %}
+<div class="container"><p class="notice">{{ settings.banner }}</p></div>
+{% endif %}
 <main id="main">
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
