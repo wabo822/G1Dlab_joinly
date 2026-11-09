@@ -1041,3 +1041,18 @@ def test_google_sign_in_is_hidden_until_configured_and_links_accounts(app, db):
     landing = again.get(f'/auth/google/callback?state={state}')
     assert urlparse(landing.headers['Location']).path == '/'
     assert db.execute("SELECT google_sub FROM users WHERE email='known@example.test'").fetchone()['google_sub'] == 'google-sub-2'
+
+
+def test_share_poster_and_open_graph_use_the_cover(app, db):
+    owner = user(db, roles=('member', 'organizer'))
+    eid = event(db, owner)
+    db.execute("UPDATE events SET title='Sortie à partager', category_id=(SELECT id FROM categories WHERE name='Cuisine') WHERE id=%s", (eid,))
+    app.config['PUBLIC_BASE_URL'] = 'https://isep.wangjiahan.com'
+    page = app.test_client().get(f'/activities/{eid}')
+    assert 'Copier le lien' in page.text and 'WhatsApp' in page.text and 'Télécharger l’affiche' in page.text
+    assert 'property="og:image"' in page.text
+    assert 'https://isep.wangjiahan.com/static/covers/cuisine/' in page.text
+    assert 'twitter:image' in page.text
+    poster = app.test_client().get(f'/activities/{eid}/affiche.png')
+    assert poster.status_code == 200 and poster.mimetype == 'image/png' and poster.data.startswith(b'\x89PNG')
+    assert len(poster.data) > 1000

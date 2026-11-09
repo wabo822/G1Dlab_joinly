@@ -27,6 +27,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
 from app import covers, notify
+from app.posters import render_poster
 from app.tickets import issue_ticket, payload_for, qr_png
 
 PARIS = ZoneInfo('Europe/Paris')
@@ -40,7 +41,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media'}
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster'}
 
 
 def _env_cutoff():
@@ -523,9 +524,12 @@ def create_app(config=None):
             ))
         covers.decorate([event])
         library = covers.library_tree() if g.user and 'admin' in g.roles else []
+        share_url = public_base() + url_for('detail', event_id=event_id)
+        share_image = public_base() + (event.get('cover_href') or url_for('static', filename='logo.png'))
         return render_template(
             'detail.html', event=event, booking=booking, reviews=reviews, mine=mine,
             can_review=can_review, favorited=favorited, following=following, library=library,
+            share_url=share_url, share_image=share_image,
         )
 
     @app.post('/activities/<int:event_id>/avis')
@@ -1337,6 +1341,26 @@ def create_app(config=None):
             (event_id,), True,
         )
         return render_template('checkin.html', event=event, result=result, stats=stats)
+
+    @app.get('/activities/<int:event_id>/affiche.png')
+    def poster(event_id):
+        event = query(event_select + ' WHERE e.id=%s', (event_id,), True)
+        if not event or (event['status'] == 'draft' and (not g.user or (event['organizer_id'] != g.user['id'] and 'admin' not in g.roles))):
+            abort(404)
+        covers.decorate([event])
+        cover_file = None
+        if event.get('cover_static'):
+            candidate = covers.ROOT / 'app' / 'static' / event['cover_static']
+            if candidate.is_file():
+                cover_file = candidate
+        elif event.get('cover_image'):
+            candidate = covers.upload_dir(app) / str(event['cover_image'])
+            if candidate.is_file():
+                cover_file = candidate
+        return app.response_class(
+            render_poster(event, public_base() + url_for('detail', event_id=event_id), cover_file),
+            mimetype='image/png',
+        )
 
     @app.get('/favicon.ico')
     def favicon():

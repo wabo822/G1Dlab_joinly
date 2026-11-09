@@ -1,5 +1,17 @@
 # Journal des modifications
 
+## 2026-11-09 — Partage et affiche
+
+La fiche propose de copier le lien, d’ouvrir WhatsApp, X, Facebook, LinkedIn ou un e-mail, et le partage natif du téléphone quand il existe. Une affiche PNG (titre, date, lieu, prix, illustration, QR) se télécharge. Les balises Open Graph et Twitter utilisent l’image de couverture en URL absolue, ce qui sert aussi aux aperçus WeChat. La police est Source Sans 3, licence SIL OFL, dans `app/fonts/`.
+
+### Fichiers
+
+- `app/posters.py`, `app/static/share.js`, `app/fonts/`
+- `app/__init__.py`, `app/templates/base.html`, `detail.html`
+- `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur Google (#13).
+
 ## 2026-11-09 — Connexion Google
 
 « Continuer avec Google » apparaît sur la connexion et l’inscription seulement si `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` sont définis. Le bouton est sinon absent et `/auth/google` répond 404. Le callback `/auth/google/callback` vérifie `state` et `nonce` (Authlib pour l’échange de jeton). Une adresse déjà vérifiée par Google relie le compte existant ou en crée un déjà confirmé, puis envoie vers les centres d’intérêt s’il en manque. Le `sub` Google est stocké.
