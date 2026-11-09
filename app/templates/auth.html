@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{% block title %}{{ {'login':'Connexion','signup':'Inscription','forgot':'Mot de passe oublié','reset':'Nouveau mot de passe'}[mode] }} — Joinly{% endblock %}
+{% block description %}Accédez à votre compte Joinly pour réserver une activité ou publier la vôtre.{% endblock %}
+{% block robots %}noindex,follow{% endblock %}
 {% block content %}
 <section class="container section">
 <div class="auth panel">
@@ -31,7 +34,7 @@
 <option value="organizer">Participer et organiser des activités</option>
 </select>
 </label>
-<p class="muted">Consultez nos <a href="{{ url_for('legal',kind='terms') }}">conditions d’utilisation</a> avant de créer votre compte.</p>
+<p class="muted">En créant un compte, vous acceptez les <a href="{{ url_for('legal', kind='terms') }}">conditions d’utilisation</a> et reconnaissez avoir pris connaissance de la <a href="{{ url_for('legal', kind='privacy') }}">politique de confidentialité</a>.</p>
 {% endif %}
 <button>{{ {'login':'Se connecter','signup':'Créer mon compte','forgot':'Recevoir un lien','reset':'Changer mon mot de passe'}[mode] }}</button>
 </form>

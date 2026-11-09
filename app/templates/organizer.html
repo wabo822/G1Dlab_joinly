@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{% block title %}Espace organisateur — Joinly{% endblock %}
+{% block description %}Créez, modifiez et suivez les inscriptions de vos activités Joinly.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
 {% block content %}
 <section class="container section">
 <div class="section-head">
@@ -10,7 +13,7 @@
 </div>
 {% for e in events %}
 <article class="panel booking-row">
-<span class="badge">{{ {'draft':'Brouillon','published':'Publié','cancelled':'Annulé'}[e.status] }}</span>
+<span class="badge badge-{{ e.status }}">{{ {'draft':'Brouillon','published':'Publié','cancelled':'Annulé'}[e.status] }}</span>
 <h2>
 <a href="{{ url_for('detail',event_id=e.id) }}">{{ e.title }}</a>
 </h2>
@@ -28,8 +31,9 @@
 </article>
 {% else %}
 <div class="empty">
-<h2>Que voulez-vous partager ?</h2>
-<p>Créez votre première activité et choisissez quand la publier.</p>
+<h2>Aucune activité pour le moment.</h2>
+<p>Enregistrez un brouillon ou publiez directement dans le catalogue. Les activités de cette version sont gratuites.</p>
+<a class="button" href="{{ url_for('edit_event') }}">Créer une activité</a>
 </div>
 {% endfor %}
 </section>

@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
 {% block title %}Explorer les activités — Joinly{% endblock %}
+{% block description %}Parcourez les activités gratuites à venir en Île-de-France et filtrez par mot-clé, lieu, catégorie ou date.{% endblock %}
 {% block content %}
 <section class="container section">
-<p class="eyebrow">SORTEZ DU QUOTIDIEN</p>
-<h1>Trouvez votre prochain bon moment.</h1>
+<p class="eyebrow">CATALOGUE</p>
+<h1>Trouver une activité.</h1>
 <form class="filters panel" method="get">
 <label>Une envie ?<input name="q" placeholder="Randonnée, jeux, cuisine…" value="{{ request.args.get('q','') }}">
 </label>
@@ -26,8 +27,8 @@
 </div>
 </form>
 <div class="section-head">
-<h2>À découvrir</h2>
-<span>{{ events|length }} activité(s) sur cette page</span>
+<h2>Résultats</h2>
+<span>{{ events|length }} activité{{ 's' if events|length != 1 else '' }} sur cette page</span>
 </div>
 {% include '_cards.html' %}
 <nav class="actions pagination" aria-label="Pagination">

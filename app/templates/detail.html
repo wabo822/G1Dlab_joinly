@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}{{ event.title }} — Joinly{% endblock %}
+{% block description %}{{ event.category or 'Activité' }} · {{ event.location }} · {{ event.starts_at|datefr }}. {{ event.description|striptags|truncate(140, true) }}{% endblock %}
 {% block content %}
 <section class="container section">
 <a href="{{ url_for('activities') }}">← Toutes les activités</a>
@@ -24,7 +25,7 @@
 <dt>Lieu</dt>
 <dd>{{ event.location }}</dd>
 <dt>Places restantes</dt>
-<dd>{{ event.available }} / {{ event.capacity }}</dd>
+<dd>{{ event.available if event.available > 0 else 0 }} / {{ event.capacity }}</dd>
 </dl>
 <p class="muted">Horaires : Europe/Paris</p>
 {% if event.status == 'cancelled' %}

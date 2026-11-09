@@ -71,7 +71,8 @@ V1 vérifient la dernière place et l’annulation concurrente. Ces garanties m�
 ne sont pas imposées à un administrateur écrivant directement en SQL.
 
 La migration `002_web` ajoute sessions, demandes de contact, limites de débit et
-jetons de réinitialisation. Les paiements et l’historique IA restent hors schéma.
+jetons de réinitialisation. La migration `003_privacy` autorise le type
+`privacy` dans `legal_pages`. Les paiements et l’historique IA restent hors schéma.
 
 ## Vérification et migrations
 

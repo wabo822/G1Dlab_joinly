@@ -1,12 +1,15 @@
 {% extends 'base.html' %}
+{% block title %}{{ legal_titles[kind] }} — Joinly{% endblock %}
+{% block description %}{{ legal_titles[kind] }} du projet étudiant Joinly (G1D Lab, ISEP) : informations sur l’éditeur, l’usage du service et les données personnelles.{% endblock %}
 {% block content %}
 <section class="container section narrow">
-<h1>{{ 'Conditions générales d’utilisation' if kind=='terms' else 'Mentions légales' }}</h1>
+<p class="eyebrow">INFORMATIONS LÉGALES</p>
+<h1>{{ legal_titles[kind] }}</h1>
 {% if page %}
 <p class="muted">Version {{ page.version }} · publiée le {{ page.published_at|datefr }}</p>
-<article class="panel prose">{{ page.content }}</article>
 {% else %}
-<p>Ce contenu n’a pas encore été publié par l’équipe.</p>
+<p class="muted">Texte de référence du projet étudiant.</p>
 {% endif %}
+<article class="panel prose legal-copy">{{ content|legal_html }}</article>
 </section>
 {% endblock %}

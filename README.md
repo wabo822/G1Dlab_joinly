@@ -29,9 +29,11 @@ Le dossier `joinly_front/` conserve la maquette d’origine ; l’application ut
 `app/templates/` et `app/static/`.
 
 Le chatbot, les fonctions sociales et le paiement restent des évolutions.
-La récupération du mot de passe nécessite un serveur SMTP configuré. Les textes
-légaux initiaux sont identifiés comme documents de démonstration à compléter
-avant une ouverture au public.
+La récupération du mot de passe nécessite un serveur SMTP configuré. Les pages
+légales (mentions, conditions d’utilisation, politique de confidentialité) sont
+rédigées pour ce projet étudiant. Un jeu de données de démonstration, qui ne
+modifie pas les comptes déjà présents, se charge avec `flask --app app seed-demo`.
+Les identifiants sont dans [docs/demo-accounts.md](docs/demo-accounts.md).
 
 ## Objectifs
 
@@ -277,7 +279,7 @@ déploiement Hangar ni changement de domaine n’a été effectué dans cette ve
 - [x] Choisir PostgreSQL et initialiser la base de développement.
 - [x] Choisir Flask, Jinja et PostgreSQL pour la première version.
 - [ ] Concevoir les maquettes et le modèle de données.
-- [x] Réaliser le socle de priorité haute et le back-office (contenus légaux à valider).
+- [x] Réaliser le socle de priorité haute et le back-office, y compris les pages légales du projet étudiant.
 - [x] Développer la découverte d'activités et la gestion des événements.
 - [x] Implémenter l'authentification et les réservations.
 - [ ] Intégrer le chatbot par API, ses prompts contextualisés et les recommandations.
