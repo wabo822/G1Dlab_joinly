@@ -101,7 +101,7 @@ def create_app(config=None):
         g.roles = set()
         token = session.get('auth_token')
         if token:
-            g.user = query('''SELECT u.id, u.email, u.display_name, u.status FROM users u
+            g.user = query('''SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at FROM users u
                 JOIN web_sessions s ON s.user_id=u.id
                 WHERE s.token_hash=%s AND s.expires_at>now() AND u.status='active' ''', (digest(token),), True)
             if g.user:
@@ -651,17 +651,13 @@ def create_app(config=None):
             role = text('role')
             if role not in ('member', 'organizer'):
                 abort(400)
-            interests = chosen_interest_ids(MIN_INTERESTS)
             with db().transaction():
                 user = query('INSERT INTO users(email,display_name,password_hash) VALUES (%s,%s,%s) RETURNING id', (email, name, generate_password_hash(password)), True)
                 db().execute("INSERT INTO user_roles(user_id,role_id) SELECT %s,id FROM roles WHERE name='member' OR name=%s", (user['id'], role))
-                replace_interests(user['id'], interests)
-            flash('Compte créé. Vous pouvez vous connecter.', 'success')
-            return redirect(url_for('login'))
-        return render_template(
-            'auth.html', mode='signup', interest_minimum=MIN_INTERESTS, selected=[],
-            categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
-        )
+            notify.start_verification(app, query, user['id'], email)
+            flash('Nous vous avons envoyé un code à 6 chiffres.', 'success')
+            return redirect(url_for('verify_email', email=email))
+        return render_template('auth.html', mode='signup')
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
@@ -674,6 +670,9 @@ def create_app(config=None):
             if not user or not valid or user['status'] != 'active':
                 flash('Identifiants incorrects ou compte indisponible.', 'error')
                 return render_template('auth.html', mode='login'), 401
+            if not user['email_verified_at']:
+                flash('Confirmez votre adresse avec le code reçu par e-mail.', 'info')
+                return redirect(url_for('verify_email', email=user['email']))
             token = secrets.token_urlsafe(32)
             session.clear()
             session.permanent = True
@@ -685,6 +684,42 @@ def create_app(config=None):
                 return redirect(url_for('interests'))
             return redirect(url_for('account'))
         return render_template('auth.html', mode='login')
+
+    @app.route('/verifier-email', methods=['GET', 'POST'])
+    def verify_email():
+        if request.method == 'POST':
+            rate_limit('verify-code', 10, 15)
+            email = email_value()
+            code = re.sub(r'\s+', '', request.form.get('code', ''))
+            if not re.fullmatch(r'\d{6}', code):
+                raise ValueError('Saisissez le code à 6 chiffres.')
+            account = query("SELECT id, email_verified_at, status FROM users WHERE email=%s", (email,), True)
+            if not account or account['status'] != 'active':
+                raise ValueError('Code incorrect.')
+            if account['email_verified_at']:
+                flash('Cette adresse est déjà confirmée.', 'success')
+                return redirect(url_for('login'))
+            notify.check_verification(app, query, account['id'], code)
+            token = secrets.token_urlsafe(32)
+            session.clear()
+            session.permanent = True
+            session['auth_token'] = token
+            db().execute('INSERT INTO web_sessions(token_hash,user_id,expires_at) VALUES (%s,%s,now()+interval \'12 hours\')', (digest(token), account['id']))
+            roles = {row['name'] for row in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (account['id'],))}
+            if 'admin' not in roles and interest_total(account['id']) < MIN_INTERESTS:
+                return redirect(url_for('interests'))
+            return redirect(url_for('home'))
+        return render_template('auth.html', mode='verify', email=request.args.get('email', ''))
+
+    @app.post('/verifier-email/renvoyer')
+    def resend_verification():
+        rate_limit('verify-resend', 5, 15)
+        email = email_value()
+        account = query("SELECT id, email_verified_at, status FROM users WHERE email=%s", (email,), True)
+        if account and account['status'] == 'active' and not account['email_verified_at']:
+            notify.start_verification(app, query, account['id'], email)
+        flash('Si un compte non confirmé correspond à cette adresse, un nouveau code a été envoyé.', 'success')
+        return redirect(url_for('verify_email', email=email))
 
     @app.post('/logout')
     def logout():
@@ -1278,7 +1313,7 @@ def create_app(config=None):
         if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email) or not 12 <= len(password) <= 128:
             raise click.ClickException('Invalid email or password (12–128 characters).')
         with db().transaction():
-            user = query('INSERT INTO users(email,display_name,password_hash) VALUES (%s,%s,%s) RETURNING id', (email, name, generate_password_hash(password)), True)
+            user = query('INSERT INTO users(email,display_name,password_hash,email_verified_at) VALUES (%s,%s,%s,now()) RETURNING id', (email, name, generate_password_hash(password)), True)
             db().execute('INSERT INTO user_roles(user_id,role_id) SELECT %s,id FROM roles', (user['id'],))
         click.echo('Administrator created.')
 

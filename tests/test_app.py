@@ -39,7 +39,7 @@ def ensure_categories(db):
 
 
 def user(db, email='member@example.test', roles=('member',), interests=None):
-    result = db.execute('INSERT INTO users(email,display_name,password_hash) VALUES (%s,%s,%s) RETURNING id', (email, email.split('@')[0], generate_password_hash(PASSWORD))).fetchone()['id']
+    result = db.execute('INSERT INTO users(email,display_name,password_hash,email_verified_at) VALUES (%s,%s,%s,now()) RETURNING id', (email, email.split('@')[0], generate_password_hash(PASSWORD))).fetchone()['id']
     db.execute('INSERT INTO user_roles SELECT %s,id FROM roles WHERE name=ANY(%s)', (result,list(roles)))
     if interests is None:
         interests = 'admin' not in roles
@@ -81,20 +81,38 @@ def test_public_pages(app):
 
 def test_signup_roles_duplicates_and_password(app, db):
     client = app.test_client()
-    ids = [str(category_id) for category_id in ensure_categories(db)]
-    form = {'email':'  NEW@Example.test ', 'display_name':'New', 'password':PASSWORD, 'role':'organizer', 'interest_ids': ids[:3]}
-    assert client.post('/signup', data={**form, 'interest_ids': ids[:2]}).status_code == 400
-    assert db.execute("SELECT id FROM users WHERE email='new@example.test'").fetchone() is None
-    assert client.post('/signup', data={**form, 'interest_ids': ids[:2] + ['999999']}).status_code == 400
+    form = {'email':'  NEW@Example.test ', 'display_name':'New', 'password':PASSWORD, 'role':'organizer'}
+    assert client.post('/signup', data={**form, 'password':'short'}).status_code == 400
+    assert client.post('/signup', data={**form, 'role':'admin'}).status_code == 400
     assert client.post('/signup', data=form).status_code == 302
     row = db.execute("SELECT * FROM users WHERE email='new@example.test'").fetchone()
-    assert row['password_hash'] != PASSWORD
+    assert row['password_hash'] != PASSWORD and row['email_verified_at'] is None
     roles = db.execute('SELECT r.name FROM roles r JOIN user_roles ur ON r.id=ur.role_id WHERE user_id=%s',(row['id'],)).fetchall()
     assert {r['name'] for r in roles} == {'member','organizer'}
-    assert db.execute('SELECT count(*) AS n FROM user_interests WHERE user_id=%s', (row['id'],)).fetchone()['n'] == 3
+    assert db.execute('SELECT count(*) AS n FROM user_interests WHERE user_id=%s', (row['id'],)).fetchone()['n'] == 0
     assert client.post('/signup', data=form).status_code == 409
-    assert client.post('/signup', data={**form,'email':'admin@example.test','role':'admin'}).status_code == 400
-    assert client.post('/signup', data={**form,'password':'short'}).status_code == 400
+    mail = db.execute("SELECT body FROM dev_outbox WHERE recipient='new@example.test' ORDER BY id DESC LIMIT 1").fetchone()
+    code = re.search(r'\b(\d{6})\b', mail['body']).group(1)
+    assert client.post('/verifier-email', data={'email': 'new@example.test', 'code': '000000'}).status_code == 400
+    assert client.post('/verifier-email', data={'email': 'new@example.test', 'code': code}).status_code == 302
+    assert client.get('/interests').status_code == 200
+    assert db.execute("SELECT email_verified_at FROM users WHERE email='new@example.test'").fetchone()['email_verified_at']
+
+
+def test_verification_code_expires_attempts_and_blocks_login(app, db):
+    client = app.test_client()
+    form = {'email': 'wait@example.test', 'display_name': 'Wait', 'password': PASSWORD, 'role': 'member'}
+    assert client.post('/signup', data=form).status_code == 302
+    assert client.post('/login', data={'email': 'wait@example.test', 'password': PASSWORD}).status_code == 302
+    assert client.get('/account').status_code == 302
+    assert client.post('/verifier-email/renvoyer', data={'email': 'wait@example.test'}).status_code == 400
+    db.execute("UPDATE email_verifications SET last_sent_at=now()-interval '2 minutes' WHERE user_id=(SELECT id FROM users WHERE email='wait@example.test')")
+    assert client.post('/verifier-email/renvoyer', data={'email': 'wait@example.test'}).status_code == 302
+    for _ in range(5):
+        assert client.post('/verifier-email', data={'email': 'wait@example.test', 'code': '111111'}).status_code == 400
+    body = db.execute("SELECT body FROM dev_outbox WHERE recipient='wait@example.test' ORDER BY id DESC LIMIT 1").fetchone()['body']
+    code = re.search(r'\b(\d{6})\b', body).group(1)
+    assert client.post('/verifier-email', data={'email': 'wait@example.test', 'code': code}).status_code == 400
 
 
 def test_session_logout_and_suspend(app, db):
