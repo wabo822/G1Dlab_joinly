@@ -25,10 +25,22 @@
 </article>
 {% else %}
 <div class="empty">
-<h3>Aucune inscription pour le moment.</h3>
-<p>Les activités confirmées et annulées apparaîtront ici.</p>
+<h3>Aucune inscription à venir.</h3>
+<p>Les activités confirmées qui ne sont pas terminées apparaissent ici.</p>
 <a class="button" href="{{ url_for('activities') }}">Trouver une activité</a>
 </div>
+{% endfor %}
+<h2>Historique</h2>
+{% for b in history %}
+<article class="panel booking-row">
+<span class="badge {{ 'badge-cancelled' if b.status != 'confirmed' or b.event_status == 'cancelled' else '' }}">{{ 'Annulée' if b.status != 'confirmed' or b.event_status == 'cancelled' else 'Terminé' }}</span>
+<h3>
+<a href="{{ url_for('detail', event_id=b.event_id) }}">{{ b.title }}</a>
+</h3>
+<p>{{ b.starts_at|datefr }} · {{ b.location }}</p>
+</article>
+{% else %}
+<p class="muted">Les activités terminées et les inscriptions annulées apparaîtront ici.</p>
 {% endfor %}
 </div>
 <aside class="panel">

@@ -18,6 +18,8 @@
 </label>
 <label>Lieu de rendez-vous<input name="location" value="{{ event.location if event else '' }}" maxlength="200" required>
 </label>
+<label>Ville<input name="city" value="{{ event.city if event else '' }}" maxlength="80" placeholder="Paris">
+</label>
 <div class="two">
 <label>Début (heure de Paris)<input type="datetime-local" name="starts_at" value="{{ event.starts_at|inputdate if event else '' }}" required>
 </label>
