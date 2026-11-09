@@ -37,6 +37,12 @@
 <label>Prix en euros<input name="price" inputmode="decimal" maxlength="8" value="{% if event %}{{ event.price_cents // 100 }},{{ '%02d'|format(event.price_cents % 100) }}{% else %}0,00{% endif %}" required>
 <small>0 = gratuit. Un prix supérieur affiche une confirmation de paiement simulé, sans encaissement.</small>
 </label>
+<label>Annulation<select name="cancellation_policy">
+<option value="flexible" {% if not event or event.cancellation_policy=='flexible' %}selected{% endif %}>Flexible — gratuit jusqu’à 24 h avant</option>
+<option value="moderate" {% if event and event.cancellation_policy=='moderate' %}selected{% endif %}>Modérée — 72 h, sinon 50 %</option>
+<option value="strict" {% if event and event.cancellation_policy=='strict' %}selected{% endif %}>Stricte — aucun remboursement simulé</option>
+</select>
+</label>
 <label>Image de couverture<input type="file" name="cover" accept="image/jpeg,image/png,image/webp">
 <small>JPEG, PNG ou WebP, 2 Mo maximum. Sans fichier, une illustration de la catégorie est choisie automatiquement.</small>
 </label>

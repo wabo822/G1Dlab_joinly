@@ -1,5 +1,18 @@
 # Journal des modifications
 
+## 2026-11-09 — Annulation et remboursement simulé
+
+Chaque activité a une politique : flexible (intégral jusqu’à 24 h avant, sinon 0), modérée (intégral jusqu’à 72 h, sinon 50 %), stricte (aucun remboursement). Le montant calculé est affiché avant l’annulation et enregistré comme « Remboursement simulé ». Le billet est invalidé, la place se libère, l’organisateur est prévenu et le participant reçoit un e-mail. Si l’organisateur annule l’activité, le remboursement simulé est intégral. L’administrateur peut saisir un remboursement manuel, avec confirmation.
+
+### Fichiers
+
+- `database/migrations/013_cancellation_refunds.sql`
+- `app/lifecycle.py`, `app/__init__.py`, `app/seed_demo.py`
+- `app/templates/detail.html`, `payment.html`, `account.html`, `event_form.html`, `admin.html`
+- `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur les billets (#11).
+
 ## 2026-11-09 — Billets et contrôle QR
 
 Chaque réservation confirmée reçoit un jeton imprévisible et un code court `JOIN-XXXX-XX`. Le billet est dans Mon espace, avec un QR code. L’organisateur de l’activité, et l’administrateur, ouvrent « Contrôle des billets » : saisie du code ou scan (BarcodeDetector, sinon html5-qrcode). Un billet ne passe qu’une fois ; l’organisateur peut annuler le contrôle. Une inscription annulée invalide le billet. La migration crée les billets déjà dus, sans e-mail. Le jeu de démonstration marque contrôlés une partie des billets passés.

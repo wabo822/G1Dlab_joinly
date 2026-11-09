@@ -943,3 +943,59 @@ def test_tickets_check_in_once_and_reject_the_wrong_organizer(app, db):
     cancelled = door.post(f'/organizer/{eid}/controle', data={'code': ticket['code']})
     assert 'Billet annulé' in cancelled.text
     assert 'Billet inconnu' in door.post(f'/organizer/{eid}/controle', data={'code': 'JOIN-XXXX-YY'}).text
+
+
+def test_simulated_refunds_follow_the_cancellation_policy(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    guest = user(db, 'guest@example.test')
+    user(db, 'admin@example.test', ('member', 'admin'), interests=False)
+
+    def priced(title, policy, hours, cents=2000):
+        eid = event(db, owner, 4)
+        db.execute(
+            """UPDATE events SET title=%s, price_cents=%s, cancellation_policy=%s,
+               starts_at=now()+make_interval(hours => %s), ends_at=now()+make_interval(hours => %s)+interval '2 hours'
+               WHERE id=%s""",
+            (title, cents, policy, hours, hours, eid),
+        )
+        return eid
+
+    flexible = priced('Flexible loin', 'flexible', 48)
+    guest_client = login(app, 'guest@example.test')
+    assert guest_client.post(f'/activities/{flexible}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    page = guest_client.get('/account').text
+    assert 'Remboursement simulé' in page and '20 €' in page
+    booking = db.execute('SELECT id FROM reservations WHERE event_id=%s', (flexible,)).fetchone()['id']
+    assert guest_client.post(f'/reservations/{booking}/cancel').status_code == 302
+    stored = db.execute('SELECT refund_cents, refund_status, status FROM reservations WHERE id=%s', (booking,)).fetchone()
+    assert stored['status'] == 'cancelled' and stored['refund_cents'] == 2000 and stored['refund_status'] == 'simulated'
+    assert 'Remboursement simulé' in db.execute(
+        "SELECT body FROM dev_outbox WHERE recipient='guest@example.test' ORDER BY id DESC LIMIT 1"
+    ).fetchone()['body']
+
+    late = priced('Flexible tard', 'flexible', 2)
+    assert guest_client.post(f'/activities/{late}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    late_id = db.execute('SELECT id FROM reservations WHERE event_id=%s', (late,)).fetchone()['id']
+    assert guest_client.post(f'/reservations/{late_id}/cancel').status_code == 302
+    assert db.execute('SELECT refund_cents FROM reservations WHERE id=%s', (late_id,)).fetchone()['refund_cents'] == 0
+
+    half = priced('Modérée', 'moderate', 48)
+    assert guest_client.post(f'/activities/{half}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    half_id = db.execute('SELECT id FROM reservations WHERE event_id=%s', (half,)).fetchone()['id']
+    assert guest_client.post(f'/reservations/{half_id}/cancel').status_code == 302
+    assert db.execute('SELECT refund_cents FROM reservations WHERE id=%s', (half_id,)).fetchone()['refund_cents'] == 1000
+
+    strict = priced('Stricte', 'strict', 96)
+    organizer = login(app, 'owner@example.test')
+    assert guest_client.post(f'/activities/{strict}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert organizer.post(f'/organizer/{strict}/cancel').status_code == 302
+    assert db.execute(
+        "SELECT refund_cents FROM reservations WHERE event_id=%s", (strict,)
+    ).fetchone()['refund_cents'] == 2000
+    manual = priced('Manuelle', 'strict', 96, cents=1500)
+    assert guest_client.post(f'/activities/{manual}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    manual_id = db.execute('SELECT id FROM reservations WHERE event_id=%s', (manual,)).fetchone()['id']
+    admin = login(app, 'admin@example.test')
+    assert admin.post(f'/admin/reservations/{manual_id}/remboursement', data={'refund': '4'}).status_code == 400
+    assert admin.post(f'/admin/reservations/{manual_id}/remboursement', data={'refund': '4', 'confirm': '1'}).status_code == 302
+    assert db.execute('SELECT refund_status, refund_cents FROM reservations WHERE id=%s', (manual_id,)).fetchone()['refund_status'] == 'manual'
