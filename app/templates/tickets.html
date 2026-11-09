@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Mes billets — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section">
+<p class="eyebrow">MON ESPACE</p>
+<h1>Mes billets.</h1>
+{% for row in rows %}
+<article class="panel booking-row ticket">
+<h2>{{ row.title }}</h2>
+<p>{{ row.starts_at|datefr }} · {{ row.location }}</p>
+{% if row.status != 'confirmed' %}
+<p class="notice error">Billet annulé.</p>
+{% elif row.code %}
+<p class="ticket-code">{{ row.code }}</p>
+{% if row.ticket_id %}
+<img src="{{ url_for('ticket_qr', ticket_id=row.ticket_id) }}" width="220" height="220" alt="QR code du billet {{ row.code }}">
+{% endif %}
+<p class="muted">{% if row.checked_in_at %}Contrôlé le {{ row.checked_in_at|datefr }}{% else %}À présenter à l’entrée.{% endif %}</p>
+{% endif %}
+</article>
+{% else %}
+<div class="empty"><h2>Aucun billet.</h2><p>Une réservation confirmée crée un billet.</p></div>
+{% endfor %}
+</section>
+{% endblock %}

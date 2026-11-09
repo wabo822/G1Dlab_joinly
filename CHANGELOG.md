@@ -1,5 +1,19 @@
 # Journal des modifications
 
+## 2026-11-09 — Billets et contrôle QR
+
+Chaque réservation confirmée reçoit un jeton imprévisible et un code court `JOIN-XXXX-XX`. Le billet est dans Mon espace, avec un QR code. L’organisateur de l’activité, et l’administrateur, ouvrent « Contrôle des billets » : saisie du code ou scan (BarcodeDetector, sinon html5-qrcode). Un billet ne passe qu’une fois ; l’organisateur peut annuler le contrôle. Une inscription annulée invalide le billet. La migration crée les billets déjà dus, sans e-mail. Le jeu de démonstration marque contrôlés une partie des billets passés.
+
+### Fichiers
+
+- `database/migrations/012_tickets.sql`, `app/tickets.py`
+- `app/__init__.py`, `app/seed_demo.py`, `app/static/checkin.js`
+- `app/templates/tickets.html`, `checkin.html`, `participants.html`, `account.html`
+- `requirements.txt` — `qrcode==8.2`
+- `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur la confirmation e-mail (#10).
+
 ## 2026-11-09 — Code de confirmation à l’inscription
 
 L’inscription envoie un code à 6 chiffres. Le compte reste non confirmé tant que le code n’est pas saisi. Ordre : inscription, code, centres d’intérêt, accueil. Le code est haché, expire en 15 minutes, accepte 5 essais, et un renvoi attend 60 secondes. Sans SMTP, le code est écrit dans le journal (`Verification code for …`) et dans `dev_outbox`. L’e-mail est en français, avec l’en-tête Joinly. `MAIL_FROM` de production : `noreply@wangjiahan.com`.

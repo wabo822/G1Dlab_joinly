@@ -26,6 +26,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import booking_block, is_finished
 from app import covers, notify
+from app.tickets import issue_ticket, payload_for, qr_png
 
 PARIS = ZoneInfo('Europe/Paris')
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,6 +130,7 @@ def create_app(config=None):
             "img-src 'self' data: https://unpkg.com https://tile.openstreetmap.org "
             "https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; "
             "style-src 'self' https://unpkg.com; script-src 'self' https://unpkg.com; "
+            "worker-src 'self' blob:; media-src 'self' blob:; "
             "form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
         )
         if request.path in ('/robots.txt', '/sitemap.xml'):
@@ -827,11 +829,12 @@ def create_app(config=None):
                 }[reason])
             if event['price_cents'] > 0 and request.form.get('payment_simulated') != '1':
                 raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
-            db().execute('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s)', (g.user['id'], event_id))
+            created = query('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s) RETURNING id', (g.user['id'], event_id), True)
+            ticket = issue_ticket(db(), created['id'])
         notify.notify(
             app, query, g.user['id'], 'booking_confirmed', 'Place confirmée',
-            f'Votre inscription à « {event["title"]} » est confirmée.',
-            f'/activities/{event_id}', dedupe_key=f'booking:{event_id}:{g.user["id"]}', email=g.user['email'],
+            f'Votre inscription à « {event["title"]} » est confirmée. Billet {ticket["code"]}.',
+            '/account/billets', dedupe_key=f'booking:{created["id"]}', email=g.user['email'],
         )
         if event['price_cents'] > 0:
             flash('Paiement simulé confirmé. Votre place est réservée — aucun montant n’a été débité.', 'success')
@@ -1018,8 +1021,15 @@ def create_app(config=None):
         event = query('SELECT * FROM events WHERE id=%s AND organizer_id=%s', (event_id, g.user['id']), True)
         if not event:
             abort(404)
-        people = query("SELECT u.display_name,r.reserved_at FROM reservations r JOIN users u ON u.id=r.member_id WHERE r.event_id=%s AND r.status='confirmed' ORDER BY r.reserved_at", (event_id,))
-        return render_template('participants.html', event=event, people=people)
+        people = query(
+            '''SELECT u.display_name, r.reserved_at, t.checked_in_at
+               FROM reservations r JOIN users u ON u.id=r.member_id
+               LEFT JOIN tickets t ON t.reservation_id=r.id
+               WHERE r.event_id=%s AND r.status='confirmed' ORDER BY r.reserved_at''',
+            (event_id,),
+        )
+        checked = sum(1 for person in people if person['checked_in_at'])
+        return render_template('participants.html', event=event, people=people, checked=checked)
 
     @app.get('/faq')
     def faq():
@@ -1094,6 +1104,90 @@ def create_app(config=None):
             (g.user['id'],),
         )
         return redirect(url_for('notifications'))
+
+    @app.get('/account/billets')
+    @require()
+    def tickets_page():
+        rows = query(
+            '''SELECT r.id, r.status, e.title, e.starts_at, e.location, t.id AS ticket_id, t.code, t.checked_in_at
+               FROM reservations r JOIN events e ON e.id=r.event_id
+               LEFT JOIN tickets t ON t.reservation_id=r.id
+               WHERE r.member_id=%s ORDER BY e.starts_at DESC''',
+            (g.user['id'],),
+        )
+        return render_template('tickets.html', rows=rows)
+
+    @app.get('/billets/<int:ticket_id>/qr.png')
+    @require()
+    def ticket_qr(ticket_id):
+        row = query(
+            '''SELECT t.token, r.member_id, e.organizer_id
+               FROM tickets t JOIN reservations r ON r.id=t.reservation_id
+               JOIN events e ON e.id=r.event_id WHERE t.id=%s''',
+            (ticket_id,), True,
+        )
+        if not row:
+            abort(404)
+        if row['member_id'] != g.user['id'] and row['organizer_id'] != g.user['id'] and 'admin' not in g.roles:
+            abort(403)
+        return app.response_class(qr_png(payload_for(row['token'], public_base())), mimetype='image/png')
+
+    @app.route('/organizer/<int:event_id>/controle', methods=['GET', 'POST'])
+    @require()
+    def checkin(event_id):
+        event = query('SELECT * FROM events WHERE id=%s', (event_id,), True)
+        if not event:
+            abort(404)
+        allowed = ('admin' in g.roles) or ('organizer' in g.roles and event['organizer_id'] == g.user['id'])
+        if not allowed:
+            abort(403)
+        result = None
+        if request.method == 'POST' and request.form.get('undo'):
+            ticket_id = request.form.get('ticket_id', '')
+            if str(ticket_id).isdigit():
+                db().execute(
+                    '''UPDATE tickets SET checked_in_at=NULL, checked_in_by=NULL
+                       WHERE id=%s AND reservation_id IN (SELECT id FROM reservations WHERE event_id=%s)''',
+                    (int(ticket_id), event_id),
+                )
+            return redirect(url_for('checkin', event_id=event_id))
+        if request.method == 'POST':
+            raw = (request.form.get('code') or '').strip()
+            if 'ticket=' in raw:
+                raw = raw.split('ticket=', 1)[1].split('&', 1)[0]
+            raw = raw[:200]
+            with db().transaction():
+                row = query(
+                    '''SELECT t.id, t.checked_in_at, r.status AS reservation_status, r.event_id, u.display_name
+                       FROM tickets t
+                       JOIN reservations r ON r.id=t.reservation_id
+                       JOIN users u ON u.id=r.member_id
+                       WHERE t.token=%s OR upper(t.code)=upper(%s)
+                       FOR UPDATE OF t''',
+                    (raw, raw), True,
+                )
+                if not row:
+                    result = {'kind': 'unknown', 'text': 'Billet inconnu.'}
+                elif row['event_id'] != event_id:
+                    result = {'kind': 'wrong', 'text': 'Ce billet n’est pas valable pour cette activité.'}
+                elif row['reservation_status'] != 'confirmed':
+                    result = {'kind': 'cancelled', 'text': 'Billet annulé.'}
+                elif row['checked_in_at']:
+                    result = {'kind': 'used', 'text': 'Déjà contrôlé.', 'name': row['display_name'], 'when': row['checked_in_at']}
+                else:
+                    checked = query(
+                        '''UPDATE tickets SET checked_in_at=clock_timestamp(), checked_in_by=%s
+                           WHERE id=%s AND checked_in_at IS NULL RETURNING checked_in_at''',
+                        (g.user['id'], row['id']), True,
+                    )
+                    result = {'kind': 'ok', 'text': 'Entrée enregistrée.', 'name': row['display_name'], 'when': checked['checked_in_at'], 'ticket_id': row['id']}
+        stats = query(
+            '''SELECT count(*) FILTER (WHERE r.status='confirmed') AS confirmed,
+                      count(*) FILTER (WHERE t.checked_in_at IS NOT NULL AND r.status='confirmed') AS checked
+               FROM reservations r LEFT JOIN tickets t ON t.reservation_id=r.id WHERE r.event_id=%s''',
+            (event_id,), True,
+        )
+        return render_template('checkin.html', event=event, result=result, stats=stats)
 
     @app.get('/favicon.ico')
     def favicon():

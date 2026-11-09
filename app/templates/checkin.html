@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Contrôle des billets — {{ event.title }}{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section narrow">
+<a href="{{ url_for('participants', event_id=event.id) }}">← Participants</a>
+<h1>Contrôle des billets</h1>
+<p>{{ event.title }} · {{ stats.checked }} / {{ stats.confirmed }} contrôlés</p>
+{% if result %}
+<p class="notice {{ 'success' if result.kind == 'ok' else 'error' }}">{{ result.text }}{% if result.name %} — {{ result.name }}{% endif %}{% if result.when and result.kind == 'used' %} ({{ result.when|datefr }}){% endif %}</p>
+{% if result.kind == 'ok' %}
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="undo" value="1">
+<input type="hidden" name="ticket_id" value="{{ result.ticket_id }}">
+<button class="secondary small">Annuler ce contrôle</button>
+</form>
+{% endif %}
+{% endif %}
+<form id="checkin-form" method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Code ou contenu du QR<input id="ticket-code" name="code" autocomplete="off" required></label>
+<button>Vérifier</button>
+</form>
+<div id="checkin-camera" class="activity-map"></div>
+<p class="muted">La caméra demande HTTPS (ou localhost). La saisie du code marche dans tous les cas.</p>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='checkin.js') }}"></script>
+</section>
+{% endblock %}
