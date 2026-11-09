@@ -17,7 +17,7 @@ PASSWORD = 'A sufficiently long test password'
 def app():
     application = create_app({'TESTING': True, 'DATABASE': 'joinly_test', 'SECRET_KEY': 'test-secret-not-for-deployment', 'WTF_CSRF_ENABLED': False})
     with psycopg.connect(dbname='joinly_test', autocommit=True) as db:
-        db.execute('TRUNCATE users,events,categories,faqs,legal_pages,contact_requests,rate_limits,user_interests CASCADE')
+        db.execute('TRUNCATE users,events,categories,faqs,legal_pages,contact_requests,rate_limits,user_interests,dev_outbox CASCADE')
     return application
 
 @pytest.fixture()
@@ -812,3 +812,85 @@ def test_map_uses_coordinates_and_allows_openstreetmap(app, db):
     mapped = app.test_client().get(f'/activities/{eid}').text
     assert 'id="activity-map"' in mapped and 'data-lat="48.8566' in mapped and 'leaflet.js' in mapped
     assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, latitude='95', longitude='2')).status_code == 400
+
+
+def test_notifications_mail_and_reminders(app, db, monkeypatch):
+    import smtplib
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    guest = user(db, 'guest@example.test')
+    fan = user(db, 'fan@example.test')
+    eid = event(db, owner, 4)
+    db.execute('INSERT INTO organizer_follows(follower_id, organizer_id) VALUES (%s, %s)', (fan, owner))
+    client = login(app, 'guest@example.test')
+    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    note = db.execute(
+        "SELECT kind FROM notifications WHERE user_id=%s AND kind='booking_confirmed'", (guest,),
+    ).fetchone()
+    assert note
+    mail = db.execute("SELECT subject, body FROM dev_outbox WHERE recipient='guest@example.test'").fetchone()
+    assert mail and 'Place confirmée' in mail['subject']
+    assert 'bell-count' in client.get('/').text
+    page = client.get('/notifications')
+    assert page.status_code == 200 and 'Place confirmée' in page.text
+    assert client.post('/notifications/lu').status_code == 302
+    assert db.execute(
+        'SELECT count(*) AS n FROM notifications WHERE user_id=%s AND read_at IS NULL', (guest,),
+    ).fetchone()['n'] == 0
+    organizer = login(app, 'owner@example.test')
+    assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, title='Balade modifiée')).status_code == 302
+    assert db.execute(
+        "SELECT count(*) AS n FROM notifications WHERE user_id=%s AND kind='event_changed'", (guest,),
+    ).fetchone()['n'] == 1
+    assert organizer.post(f'/organizer/{eid}/cancel').status_code == 302
+    assert db.execute(
+        "SELECT count(*) AS n FROM notifications WHERE user_id=%s AND kind='event_cancelled'", (guest,),
+    ).fetchone()['n'] == 1
+    published = event(db, owner, 4)
+    db.execute("UPDATE events SET title='Nouvelle sortie' WHERE id=%s", (published,))
+    assert organizer.post(f'/organizer/{published}/edit', data=event_form(db, published, title='Nouvelle sortie')).status_code == 302
+    assert db.execute(
+        "SELECT count(*) AS n FROM notifications WHERE user_id=%s AND kind='new_activity'", (fan,),
+    ).fetchone()['n'] == 0
+    fresh = event(db, owner, status='draft')
+    assert organizer.post(f'/organizer/{fresh}/edit', data=event_form(db, fresh, status='published', title='Sortie suivie')).status_code == 302
+    assert db.execute(
+        "SELECT count(*) AS n FROM notifications WHERE user_id=%s AND kind='new_activity'", (fan,),
+    ).fetchone()['n'] == 1
+    past = event(db, owner, 4)
+    db.execute("UPDATE events SET starts_at=now()-interval '3 hours', ends_at=now()-interval '1 hour' WHERE id=%s", (past,))
+    db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (guest, past))
+    assert client.post(f'/activities/{past}/avis', data={'rating': '5', 'comment': 'Très belle sortie.'}).status_code == 302
+    assert db.execute(
+        "SELECT count(*) AS n FROM notifications WHERE user_id=%s AND kind='new_review'", (owner,),
+    ).fetchone()['n'] == 1
+    soon = event(db, owner, 4)
+    db.execute(
+        "UPDATE events SET starts_at=now()+interval '3 hours', ends_at=now()+interval '5 hours' WHERE id=%s",
+        (soon,),
+    )
+    db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (guest, soon))
+    runner = app.test_cli_runner()
+    assert runner.invoke(args=['send-reminders']).exit_code == 0
+    assert runner.invoke(args=['send-reminders']).exit_code == 0
+    assert db.execute(
+        "SELECT count(*) AS n FROM notifications WHERE user_id=%s AND kind='reminder'", (guest,),
+    ).fetchone()['n'] == 1
+    assert db.execute('SELECT reminder_sent_at FROM reservations WHERE event_id=%s', (soon,)).fetchone()['reminder_sent_at']
+
+    class Boom:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def starttls(self, **kwargs):
+            raise smtplib.SMTPException('down')
+        def send_message(self, message):
+            raise smtplib.SMTPException('down')
+
+    monkeypatch.setenv('SMTP_HOST', 'mail.example.test')
+    monkeypatch.setenv('MAIL_FROM', 'noreply@wangjiahan.com')
+    monkeypatch.setattr('app.notify.smtplib.SMTP', Boom)
+    other = event(db, owner, 4)
+    assert client.post(f'/activities/{other}/reserve').status_code == 302

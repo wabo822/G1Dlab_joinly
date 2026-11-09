@@ -39,6 +39,7 @@
 </div>
 <div class="actions">
 {% if g.user %}
+<a class="bell" href="{{ url_for('notifications') }}">Notifications{% if unread %}<span class="bell-count">{{ unread }}</span>{% endif %}</a>
 <a class="button secondary small" href="{{ url_for('account') }}">Mon espace</a>
 <form method="post" action="{{ url_for('logout') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

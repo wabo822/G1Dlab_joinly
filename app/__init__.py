@@ -25,7 +25,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import booking_block, is_finished
-from app import covers
+from app import covers, notify
 
 PARIS = ZoneInfo('Europe/Paris')
 ROOT = Path(__file__).resolve().parents[1]
@@ -83,6 +83,8 @@ def create_app(config=None):
 
     def query(sql, args=(), one=False):
         result = db().execute(sql, args)
+        if result.description is None:
+            return None
         return result.fetchone() if one else result.fetchall()
 
     @app.teardown_appcontext
@@ -316,6 +318,10 @@ def create_app(config=None):
             'og_image': base + url_for('static', filename='logo.png'),
             'legal_titles': LEGAL_TITLES,
             'booking_cutoff': timedelta(minutes=max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0))),
+            'unread': query(
+                'SELECT count(*) AS n FROM notifications WHERE user_id=%s AND read_at IS NULL',
+                (g.user['id'],), True,
+            )['n'] if getattr(g, 'user', None) else 0,
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
@@ -546,6 +552,13 @@ def create_app(config=None):
                 'INSERT INTO reviews(event_id, author_id, rating, comment) VALUES (%s, %s, %s, %s)',
                 (event_id, g.user['id'], rating, comment),
             )
+            organizer = query('SELECT id FROM users WHERE id=%s', (event['organizer_id'],), True)
+            if organizer and organizer['id'] != g.user['id']:
+                notify.notify(
+                    app, query, organizer['id'], 'new_review', 'Nouvel avis',
+                    f'Un participant a laissé un avis sur « {event["title"]} ».',
+                    f'/activities/{event_id}', dedupe_key=f'review:{event_id}:{g.user["id"]}',
+                )
             flash('Merci, votre avis est publié.', 'success')
         return redirect(url_for('detail', event_id=event_id))
 
@@ -780,6 +793,11 @@ def create_app(config=None):
             if event['price_cents'] > 0 and request.form.get('payment_simulated') != '1':
                 raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
             db().execute('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s)', (g.user['id'], event_id))
+        notify.notify(
+            app, query, g.user['id'], 'booking_confirmed', 'Place confirmée',
+            f'Votre inscription à « {event["title"]} » est confirmée.',
+            f'/activities/{event_id}', dedupe_key=f'booking:{event_id}:{g.user["id"]}', email=g.user['email'],
+        )
         if event['price_cents'] > 0:
             flash('Paiement simulé confirmé. Votre place est réservée — aucun montant n’a été débité.', 'success')
         else:
@@ -865,6 +883,7 @@ def create_app(config=None):
             abort(404)
         if request.method == 'POST':
             data = event_data()
+            previous = query('SELECT * FROM events WHERE id=%s AND organizer_id=%s', (event_id, g.user['id']), True) if event_id else None
             with db().transaction():
                 if event_id:
                     event = query('SELECT * FROM events WHERE id=%s AND organizer_id=%s FOR UPDATE', (event_id, g.user['id']), True)
@@ -891,6 +910,29 @@ def create_app(config=None):
                     )['id']
                     event = {'cover_image': None}
                 store_cover(event_id, event.get('cover_image') if event else None)
+            if data['status'] == 'published' and (not previous or previous['status'] != 'published'):
+                for follower in query(
+                    '''SELECT follower_id FROM organizer_follows WHERE organizer_id=%s''',
+                    (g.user['id'],),
+                ):
+                    notify.notify(
+                        app, query, follower['follower_id'], 'new_activity', 'Nouvelle activité',
+                        f'Une personne que vous suivez propose « {data["title"]} ».',
+                        f'/activities/{event_id}', dedupe_key=f'new_activity:{event_id}',
+                    )
+            elif previous and data['status'] == 'published':
+                watched = ('title', 'description', 'location', 'starts_at', 'ends_at', 'price_cents', 'capacity', 'city')
+                if any(key in data and data[key] != previous.get(key) for key in watched):
+                    for person in query(
+                        '''SELECT u.id, u.email FROM reservations r JOIN users u ON u.id=r.member_id
+                           WHERE r.event_id=%s AND r.status='confirmed' ''',
+                        (event_id,),
+                    ):
+                        notify.notify(
+                            app, query, person['id'], 'event_changed', 'Activité modifiée',
+                            f'« {data["title"]} » a été mise à jour.',
+                            f'/activities/{event_id}', email=person['email'],
+                        )
             flash('Activité enregistrée.', 'success')
             return redirect(url_for('organizer'))
         return render_template('event_form.html', event=event, categories=query('SELECT * FROM categories ORDER BY name'), library=covers.library_tree())
@@ -919,8 +961,19 @@ def create_app(config=None):
                 abort(404)
             if event['starts_at'] <= datetime.now(timezone.utc):
                 raise ValueError('Cette activité a déjà commencé.')
+            people = query(
+                '''SELECT u.id, u.email FROM reservations r JOIN users u ON u.id=r.member_id
+                   WHERE r.event_id=%s AND r.status='confirmed' ''',
+                (event_id,),
+            )
             db().execute("UPDATE events SET status='cancelled' WHERE id=%s", (event_id,))
             db().execute("UPDATE reservations SET status='cancelled',cancelled_at=clock_timestamp() WHERE event_id=%s AND status='confirmed'", (event_id,))
+        for person in people:
+            notify.notify(
+                app, query, person['id'], 'event_cancelled', 'Activité annulée',
+                f'« {event["title"]} » est annulée. Votre inscription ne tient plus.',
+                f'/activities/{event_id}', dedupe_key=f'cancelled:{event_id}:{person["id"]}', email=person['email'],
+            )
         flash('Activité et inscriptions annulées.', 'success')
         return redirect(url_for('organizer'))
 
@@ -961,6 +1014,7 @@ def create_app(config=None):
             'Allow: /\n'
             'Disallow: /admin\n'
             'Disallow: /account\n'
+            'Disallow: /notifications\n'
             'Disallow: /organizer\n'
             'Disallow: /reset-password/\n'
             '\n'
@@ -987,6 +1041,24 @@ def create_app(config=None):
             body.append(f'  <url><loc>{xml_escape(loc)}</loc></url>')
         body.append('</urlset>')
         return app.response_class('\n'.join(body) + '\n', mimetype='application/xml; charset=utf-8')
+
+    @app.get('/notifications')
+    @require()
+    def notifications():
+        items = query(
+            'SELECT * FROM notifications WHERE user_id=%s ORDER BY created_at DESC LIMIT 80',
+            (g.user['id'],),
+        )
+        return render_template('notifications.html', items=items)
+
+    @app.post('/notifications/lu')
+    @require()
+    def read_notifications():
+        db().execute(
+            'UPDATE notifications SET read_at=COALESCE(read_at, now()) WHERE user_id=%s',
+            (g.user['id'],),
+        )
+        return redirect(url_for('notifications'))
 
     @app.get('/favicon.ico')
     def favicon():
@@ -1232,5 +1304,11 @@ def create_app(config=None):
             f"({stats['demo_users']} demo accounts, {stats['demo_events']} demo activities in total)."
         )
         click.echo('Credentials: docs/demo-accounts.md')
+
+    @app.cli.command('send-reminders')
+    def send_reminders():
+        """Email and notify confirmed attendees whose activity starts within 24 hours."""
+        count = notify.send_reminders(app, query, db)
+        click.echo(f'Reminders sent: {count}')
 
     return app

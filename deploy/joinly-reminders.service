@@ -1,0 +1,11 @@
+[Unit]
+Description=Joinly booking reminders
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=joinly
+Group=joinly
+WorkingDirectory=/opt/joinly/current
+EnvironmentFile=/etc/joinly.env
+ExecStart=/opt/joinly/venv/bin/flask --app app send-reminders
