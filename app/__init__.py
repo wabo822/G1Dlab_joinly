@@ -27,6 +27,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
 from app import covers, notify
+from app.charts import line_chart
 from app.posters import render_poster
 from app.tickets import issue_ticket, payload_for, qr_png
 
@@ -1009,6 +1010,48 @@ def create_app(config=None):
     @require('organizer')
     def organizer():
         return render_template('organizer.html', events=query(event_select + ' WHERE e.organizer_id=%s ORDER BY e.starts_at DESC', (g.user['id'],)))
+
+    @app.get('/organizer/tableau')
+    @require('organizer')
+    def organizer_dashboard():
+        owner = g.user['id']
+        stats = query(
+            '''SELECT COALESCE(SUM(e.view_count),0) AS views,
+                      COALESCE(SUM(e.capacity),0) AS capacity,
+                      COALESCE(SUM((SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')),0) AS filled,
+                      COALESCE(SUM(e.price_cents * (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')),0) AS gross,
+                      COALESCE(SUM((SELECT COALESCE(SUM(r.refund_cents),0) FROM reservations r WHERE r.event_id=e.id)),0) AS refunds
+               FROM events e WHERE e.organizer_id=%s AND e.status<>'cancelled' ''',
+            (owner,), True,
+        )
+        rating = query(
+            '''SELECT round(avg(rv.rating)::numeric, 1) AS avg, count(*) AS n
+               FROM reviews rv JOIN events e ON e.id=rv.event_id
+               WHERE e.organizer_id=%s AND NOT rv.hidden''',
+            (owner,), True,
+        )
+        top = query(
+            '''SELECT e.id, e.title, e.view_count,
+                      (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS booked
+               FROM events e WHERE e.organizer_id=%s
+               ORDER BY booked DESC, e.view_count DESC LIMIT 5''',
+            (owner,),
+        )
+        days = query(
+            '''SELECT to_char((r.reserved_at AT TIME ZONE 'Europe/Paris')::date, 'DD/MM') AS label, count(*) AS n
+               FROM reservations r JOIN events e ON e.id=r.event_id
+               WHERE e.organizer_id=%s AND r.status='confirmed' AND r.reserved_at > now() - interval '30 days'
+               GROUP BY 1 ORDER BY min(r.reserved_at)''',
+            (owner,),
+        )
+        capacity = int(stats['capacity'] or 0)
+        filled = int(stats['filled'] or 0)
+        return render_template(
+            'dashboard.html', stats=stats, rating=rating, top=top,
+            fill_rate=round(100 * filled / capacity) if capacity else 0,
+            net=int(stats['gross'] or 0) - int(stats['refunds'] or 0),
+            chart=line_chart([row['n'] for row in days] or [0], [row['label'] for row in days] or ['—']),
+        )
 
     def event_data():
         try:

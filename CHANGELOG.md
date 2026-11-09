@@ -1,5 +1,16 @@
 # Journal des modifications
 
+## 2026-11-09 — Tableau de bord organisateur
+
+`/organizer/tableau` résume les consultations, le taux de remplissage, le revenu simulé (prix des inscriptions confirmées moins les remboursements), la note moyenne, les activités les plus suivies et un graphique SVG des réservations confirmées des 30 derniers jours.
+
+### Fichiers
+
+- `app/charts.py`, `app/__init__.py`, `app/templates/dashboard.html`, `organizer.html`
+- `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur le partage (#14).
+
 ## 2026-11-09 — Partage et affiche
 
 La fiche propose de copier le lien, d’ouvrir WhatsApp, X, Facebook, LinkedIn ou un e-mail, et le partage natif du téléphone quand il existe. Une affiche PNG (titre, date, lieu, prix, illustration, QR) se télécharge. Les balises Open Graph et Twitter utilisent l’image de couverture en URL absolue, ce qui sert aussi aux aperçus WeChat. La police est Source Sans 3, licence SIL OFL, dans `app/fonts/`.
