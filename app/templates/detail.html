@@ -17,6 +17,13 @@
 </div>
 <h2>Au programme</h2>
 <p class="prose">{{ event.description }}</p>
+{% if event.latitude is not none and event.longitude is not none %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<div id="activity-map" class="activity-map" data-lat="{{ event.latitude }}" data-lng="{{ event.longitude }}" data-label="{{ event.title }}"></div>
+<p class="muted">Carte OpenStreetMap · {{ event.latitude }}, {{ event.longitude }}</p>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('static', filename='map.js') }}"></script>
+{% endif %}
 </article>
 <aside class="panel booking">
 <h2>On se retrouve ?</h2>

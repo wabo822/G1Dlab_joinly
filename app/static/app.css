@@ -1016,3 +1016,8 @@ hr {
     scroll-behavior:auto!important;
   }
 }
+.activity-map {
+  height:320px;
+  border-radius:16px;
+  margin:24px 0 8px;
+}

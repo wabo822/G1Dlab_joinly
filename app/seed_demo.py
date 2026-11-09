@@ -200,6 +200,60 @@ ACTIVITIES = (
 )
 
 
+COORDS = {
+    'Balade commentée au Luxembourg': (48.84622, 2.33716),
+    'Footing en petit groupe à Bercy': (48.83535, 2.38280),
+    'Aquarelle au square': (48.85115, 2.32340),
+    'Grande soirée jeux': (48.85540, 2.37620),
+    'Tartes de saison': (48.86120, 2.44370),
+    'Chorale ouverte': (48.84730, 2.43750),
+    'Photo au canal Saint-Martin': (48.87500, 2.36480),
+    'Yoga au parc': (48.88090, 2.38280),
+    'Café langues français–anglais': (48.86320, 2.36220),
+    'Collecte solidaire de quartier': (48.89240, 2.34470),
+    'Oiseaux au lac de Créteil': (48.77720, 2.45180),
+    'Escalade loisir, première fois': (48.89750, 2.38590),
+    'Lecture à voix haute': (48.83370, 2.37660),
+    'Initiation au bridge': (48.89440, 2.26780),
+    'Sushis végétariens': (48.84120, 2.29650),
+    'Jam session acoustique': (48.86680, 2.38380),
+    'Portraits en lumière naturelle': (48.85560, 2.29860),
+    'Marche méditative au Bois de Boulogne': (48.86240, 2.25300),
+    'Conversation en espagnol': (48.87980, 2.33940),
+    'Distribution de repas solidaires': (48.93560, 2.35980),
+    'Boucle en forêt de Meudon': (48.79250, 2.22950),
+    'Badminton loisir': (48.82440, 2.27000),
+    'Croquis d’architecture': (48.85540, 2.36550),
+    'Escape game de salon': (48.83220, 2.24680),
+    'Choux et éclairs': (48.80780, 2.13050),
+    'Découverte du ukulélé': (48.85180, 2.47450),
+    'Photo de rue à Belleville': (48.87020, 2.38510),
+    'Étirements après le travail': (48.90120, 2.26850),
+    'Tandem français–arabe': (48.86650, 2.37300),
+    'Atelier réparation de vélos': (48.86080, 2.44320),
+    'Pique-nique lecture au Montsouris': (48.82240, 2.33900),
+    'Sortie rollers le long de la Marne': (48.83650, 2.48350),
+    'Herborisation au Parc floral': (48.83880, 2.44020),
+    'Course relais amicale': (48.84800, 2.25850),
+    'Street art de la Butte-aux-Cailles': (48.82780, 2.35220),
+    'Après-midi échecs': (48.84622, 2.33716),
+    'Cuisine syrienne à partager': (48.89380, 2.34150),
+    'Répétition ouverte de chorale': (48.77700, 2.29850),
+    'Sortie photo nocturne': (48.85660, 2.34100),
+    'Sophrologie pour débutants': (48.90500, 2.21500),
+    'Café allemand': (48.85050, 2.32850),
+    'Maraude solidaire': (48.86760, 2.36360),
+    'Ramassage en forêt de Meudon': (48.78900, 2.26150),
+    'Tournoi de ping-pong': (48.82150, 2.28950),
+    'Sentier et pause à Saint-Germain': (48.89850, 2.09380),
+    'Atelier calligraphie latine': (48.84220, 2.34960),
+    'Basket loisir en extérieur': (48.82950, 2.43300),
+    'Brunch partagé': (48.82350, 2.27050),
+    'Pique-nique au parc de Sceaux': (48.77550, 2.30100),
+    'Concert acoustique au bord de l’eau': (48.89440, 2.26780),
+}
+
+
 def _city(location):
     head = location.split('·')[0].strip()
     if head.lower().startswith('paris'):
@@ -415,9 +469,10 @@ def seed_demo(conn):
                     ),
                 ).fetchone()['id']
                 stats['events_created'] += 1
+            latitude, longitude = COORDS.get(title, (None, None))
             conn.execute(
-                'UPDATE events SET price_cents=%s, city=%s WHERE id=%s',
-                (PAID_PRICES.get(title, 0), _city(location), event_id),
+                'UPDATE events SET price_cents=%s, city=%s, latitude=%s, longitude=%s WHERE id=%s',
+                (PAID_PRICES.get(title, 0), _city(location), latitude, longitude, event_id),
             )
 
             if status == 'cancelled':
