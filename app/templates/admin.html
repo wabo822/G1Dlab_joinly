@@ -11,6 +11,7 @@
 <a href="#legal">Pages légales</a>
 <a href="#contact">Messages</a>
 <a href="#tarifs">Tarifs</a>
+<a href="#avis">Avis</a>
 </nav>
 <h2 id="users">Comptes et droits</h2>
 <div class="admin-grid">
@@ -107,5 +108,19 @@
 </div>
 {% endfor %}
 </div>
+<h2 id="avis">Avis</h2>
+<p>Masquer un avis le retire de la moyenne et de la fiche publique. L’auteur le voit encore et peut le modifier.</p>
+{% for review in reviews %}
+<form class="panel stack" method="post" action="{{ url_for('admin_review', review_id=review.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<strong>{{ review.rating }} ★ · {{ review.display_name }}</strong>
+<span>{{ review.title }}</span>
+<p class="prose">{{ review.comment }}</p>
+<label class="check"><input type="checkbox" name="hidden" {% if review.hidden %}checked{% endif %}>Masquer</label>
+<button class="secondary small">Enregistrer</button>
+</form>
+{% else %}
+<p class="muted">Aucun avis pour le moment.</p>
+{% endfor %}
 </section>
 {% endblock %}
