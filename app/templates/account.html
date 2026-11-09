@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{% block title %}Mon espace — Joinly{% endblock %}
+{% block description %}Consultez vos inscriptions et mettez à jour votre profil Joinly.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
 {% block content %}
 <section class="container section">
 <p class="eyebrow">MON ESPACE</p>
@@ -8,7 +11,7 @@
 <h2>Mes inscriptions</h2>
 {% for b in bookings %}
 <article class="panel booking-row">
-<span class="badge">{{ 'Confirmée' if b.status == 'confirmed' else 'Annulée' }}</span>
+<span class="badge {{ 'badge-published' if b.status == 'confirmed' else 'badge-cancelled' }}">{{ 'Confirmée' if b.status == 'confirmed' else 'Annulée' }}</span>
 <h3>
 <a href="{{ url_for('detail',event_id=b.event_id) }}">{{ b.title }}</a>
 </h3>
@@ -22,7 +25,8 @@
 </article>
 {% else %}
 <div class="empty">
-<h3>Votre agenda attend sa première rencontre.</h3>
+<h3>Aucune inscription pour le moment.</h3>
+<p>Les activités confirmées et annulées apparaîtront ici.</p>
 <a class="button" href="{{ url_for('activities') }}">Trouver une activité</a>
 </div>
 {% endfor %}

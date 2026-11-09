@@ -1,12 +1,27 @@
 {% extends 'base.html' %}
+{% block title %}{{ title }} — Joinly{% endblock %}
+{% block description %}{{ message }}{% endblock %}
+{% block robots %}noindex,follow{% endblock %}
 {% block content %}
 <section class="container section narrow">
-<div class="panel">
-<p class="eyebrow">JOINLY</p>
+<div class="panel error-panel">
+<p class="eyebrow">{% if code %}Erreur {{ code }}{% else %}JOINLY{% endif %}</p>
 <h1>{{ title }}</h1>
 <p>{{ message }}</p>
+{% if code in (400, 409, 413, 429) %}
 <p>Pour corriger un formulaire, revenez à la page précédente dans votre navigateur.</p>
+{% elif code == 500 %}
+<p>Vous pouvez revenir à l’accueil ou écrire à l’équipe si le problème se répète.</p>
+{% elif code == 404 %}
+<p>Le lien est peut-être ancien. Le catalogue et la FAQ restent disponibles.</p>
+{% endif %}
+<div class="actions">
 <a class="button" href="{{ url_for('home') }}">Retour à l’accueil</a>
+{% if code == 404 %}
+<a class="button secondary" href="{{ url_for('activities') }}">Explorer les activités</a>
+{% endif %}
+<a class="button secondary" href="{{ url_for('contact') }}">Contacter l’équipe</a>
+</div>
 </div>
 </section>
 {% endblock %}

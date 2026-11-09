@@ -3,9 +3,8 @@
 <article class="activity">
 <div class="card-art art-{{ loop.index0 % 4 }}">
 <span>{{ event.category or 'À découvrir' }}</span>
-<strong>{{ (event.starts_at|datefr)[:2] }}<small>{{ event.starts_at|datefr }}</small>
-</strong>
-<span class="art-label">On y va ensemble.</span>
+<strong>{{ event.starts_at|daynum }}<small>{{ event.starts_at|monthfr }}</small></strong>
+<span class="art-label">{{ event.starts_at|timefr }}</span>
 </div>
 <div class="card-body">
 <div class="meta">
@@ -17,17 +16,30 @@
 </h3>
 <p>{{ event.location }}</p>
 <p class="muted">Avec {{ event.organizer }}</p>
+{% set remaining = event.available if event.available > 0 else 0 %}
+{% set taken = event.capacity - remaining %}
+{% set ratio = (taken * 100 / event.capacity)|round|int if event.capacity else 0 %}
+<div class="meter {% if ratio >= 100 %}meter-full{% elif ratio >= 75 %}meter-high{% elif ratio >= 40 %}meter-mid{% else %}meter-low{% endif %}" role="presentation"><span></span></div>
 <div class="card-bottom">
-<span>{{ event.available }} place{{ 's' if event.available != 1 else '' }} disponible{{ 's' if event.available != 1 else '' }}</span>
+<span>{% if remaining == 0 %}Complet{% elif remaining == 1 %}1 place disponible{% else %}{{ remaining }} places disponibles{% endif %}</span>
 <a href="{{ url_for('detail',event_id=event.id) }}" aria-label="Découvrir {{ event.title }}">Découvrir ↗</a>
 </div>
 </div>
 </article>
 {% else %}
 <div class="empty">
-<h3>La prochaine rencontre reste à inventer.</h3>
-<p>Aucune activité ne correspond pour le moment. Essayez d’autres filtres ou proposez la vôtre.</p>
-<a class="button secondary" href="{{ url_for('signup') if not g.user else url_for('account') }}">Rejoindre Joinly</a>
+<h3>Aucune activité à afficher.</h3>
+{% if request.args.get('q') or request.args.get('location') or request.args.get('category') or request.args.get('from') or request.args.get('to') %}
+<p>Aucun résultat pour ces critères. Élargissez la recherche ou réinitialisez les filtres.</p>
+<a class="button secondary" href="{{ url_for('activities') }}">Réinitialiser</a>
+{% else %}
+<p>Aucune activité à venir n’est publiée pour le moment.</p>
+{% if not g.user %}
+<a class="button" href="{{ url_for('signup') }}">Créer un compte</a>
+{% elif 'organizer' in g.roles %}
+<a class="button" href="{{ url_for('edit_event') }}">Proposer une activité</a>
+{% endif %}
+{% endif %}
 </div>
 {% endfor %}
 </div>

@@ -37,18 +37,38 @@ applique les migrations avec le rôle propriétaire.
 
 ## Contenu initial et administrateur
 
+Appliquer d’abord les migrations, dont `003_privacy` (politique de confidentialité) :
+
+```bash
+sudo python3 scripts/migrate.py
+sudo python3 scripts/migrate.py --database joinly_test   # si la base de tests existe déjà
+```
+
+Puis :
+
 ```bash
 .venv/bin/python scripts/seed.py
-# Facultatif : ajoute six événements fictifs identifiés par [Démo].
+# Jeu de démonstration réaliste et idempotent (comptes, activités, inscriptions).
+.venv/bin/flask --app app seed-demo
+# Équivalent :
 .venv/bin/python scripts/seed.py --demo
 ```
 
-La commande ajoute catégories, FAQ et textes de démonstration si absents. Elle
-ne remplace pas les contenus existants. S’il n’existe aucun administrateur, elle
-crée `admin@joinly.test` avec un mot de passe aléatoire enregistré uniquement dans
-`.local/initial-admin.txt` (mode 600). Ce compte est destiné au développement.
-Changer son e-mail et son mot de passe depuis **Mon espace → E-mail et mot de passe**
-avant usage réel ; ce changement invalide les sessions existantes.
+`scripts/seed.py` ajoute les catégories, les questions de FAQ manquantes et les
+textes légaux de référence s’ils sont absents ou s’ils contiennent encore un
+ancien marqueur de démonstration (« à renseigner », « Document de démonstration »).
+Une version déjà publiée et rédigée n’est pas remplacée. S’il n’existe aucun
+administrateur, le script crée `admin@joinly.test` avec un mot de passe aléatoire
+enregistré uniquement dans `.local/initial-admin.txt` (mode 600). Ce compte est
+destiné au développement. Changer son e-mail et son mot de passe depuis
+**Mon espace → E-mail et mot de passe** avant usage réel ; ce changement invalide
+les sessions existantes.
+
+`flask seed-demo` ajoute environ 40 comptes `@demo.joinly.fr`, une cinquantaine
+d’activités en Île-de-France et des inscriptions. Il ne supprime rien et ne
+modifie pas un compte déjà présent, même si l’adresse est dans la liste de
+démonstration. Le relancer ne crée pas de doublon. Les mots de passe et le
+détail des comptes sont dans [docs/demo-accounts.md](demo-accounts.md).
 
 Pour créer explicitement un administrateur supplémentaire :
 
@@ -60,9 +80,11 @@ Le mot de passe est demandé sans affichage. Un visiteur ne peut jamais choisir 
 rôle administrateur. Un organisateur peut s’inscrire librement ; l’administrateur
 peut ensuite retirer cette habilitation ou suspendre son compte.
 
-Les contenus légaux initiaux disent explicitement qu’ils sont des documents de
-prototype. Compléter les informations de l’éditeur, de l’hébergeur et la politique
-de conservation, puis publier une nouvelle version depuis l’administration.
+Les pages légales livrées décrivent le projet étudiant : éditeur, hébergeur
+Contabo (adresse de l’impressum), conditions d’utilisation et politique de
+confidentialité. L’administration peut en publier une nouvelle version ; l’ancienne
+reste en base. `PUBLIC_BASE_URL` sert aussi aux URL canoniques, aux balises
+Open Graph et au fichier `sitemap.xml`.
 
 ## Lancement local
 

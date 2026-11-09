@@ -1,16 +1,21 @@
 {% extends 'base.html' %}
+{% block title %}Participants — {{ event.title }} — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
 {% block content %}
 <section class="container section narrow">
 <a href="{{ url_for('organizer') }}">← Mes activités</a>
+<p class="eyebrow">INSCRIPTIONS</p>
 <h1>Participants</h1>
 <h2>{{ event.title }}</h2>
-<p>{{ people|length }} inscription(s) confirmée(s) / {{ event.capacity }} places</p>
+<p>{{ people|length }} inscription{{ 's' if people|length != 1 else '' }} confirmée{{ 's' if people|length != 1 else '' }} sur {{ event.capacity }} places. Les adresses e-mail ne sont pas affichées.</p>
 <div class="panel">
 {% for p in people %}
-<p>
-<strong>{{ p.display_name }}</strong> · Inscription le {{ p.reserved_at|datefr }}</p>
+<p class="participant"><strong>{{ p.display_name }}</strong> <span class="muted">· Inscription le {{ p.reserved_at|datefr }}</span></p>
 {% else %}
-<p>Aucune inscription pour le moment.</p>
+<div class="empty">
+<h3>Aucune inscription confirmée.</h3>
+<p>Les places réservées apparaîtront ici, avec le nom affiché uniquement.</p>
+</div>
 {% endfor %}
 </div>
 </section>

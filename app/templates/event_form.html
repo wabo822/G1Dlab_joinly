@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% block title %}{{ 'Modifier' if event else 'Créer' }} une activité — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
 {% block content %}
 <section class="container section narrow">
 <a href="{{ url_for('organizer') }}">← Mes activités</a>

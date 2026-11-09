@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% block title %}FAQ — Joinly{% endblock %}
+{% block description %}Réponses pratiques sur les réservations, les annulations, les cookies et les données personnelles de Joinly.{% endblock %}
 {% block content %}
 <section class="container section narrow">
 <p class="eyebrow">ON VOUS ACCOMPAGNE</p>
@@ -9,7 +11,10 @@
 <p class="prose">{{ faq.answer }}</p>
 </details>
 {% else %}
-<p>La FAQ sera publiée prochainement.</p>
+<div class="empty">
+<h3>Aucune question publiée.</h3>
+<p>L’équipe n’a pas encore mis de réponse en ligne. Vous pouvez écrire via le formulaire de contact.</p>
+</div>
 {% endfor %}
 <p>Une autre question ? <a href="{{ url_for('contact') }}">Contactez-nous.</a>
 </p>

@@ -1,9 +1,12 @@
 {% extends 'base.html' %}
+{% block title %}Contact — Joinly{% endblock %}
+{% block description %}Écrivez à l’équipe du projet étudiant Joinly. Les messages sont lus depuis l’espace d’administration.{% endblock %}
 {% block content %}
 <section class="container section narrow">
-<p class="eyebrow">RESTONS EN CONTACT</p>
-<h1>On vous écoute.</h1>
-<p>Une question sur Joinly ou une difficulté ? Votre message sera enregistré pour l’équipe.</p>
+<p class="eyebrow">CONTACT</p>
+<h1>Écrire à l’équipe.</h1>
+<p>Une question sur une activité, un compte ou vos données ? Le message est enregistré et traité dans l’espace d’administration. Il n’est pas transmis à un service commercial.</p>
+<p class="muted">Consultez la <a href="{{ url_for('legal', kind='privacy') }}">politique de confidentialité</a> pour savoir quelles informations sont conservées, et pendant combien de temps.</p>
 <form method="post" class="panel stack">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Nom<input name="name" maxlength="100" autocomplete="name" required>

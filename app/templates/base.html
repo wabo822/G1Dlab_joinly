@@ -3,18 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Découvrez des activités près de chez vous et rencontrez de nouvelles personnes avec Joinly.">
-<title>
-{% block title %}Joinly — Faites des choses ensemble{% endblock %}
-</title>
-<link rel="stylesheet" href="{{ url_for('static',filename='app.css') }}">
+<title>{% block title %}Joinly — Activités et rencontres{% endblock %}</title>
+<meta name="description" content="{% block description %}Joinly réunit des habitants d’Île-de-France autour d’activités gratuites. Découvrez une sortie, réservez votre place et organisez la vôtre.{% endblock %}">
+<meta name="robots" content="{% block robots %}index,follow{% endblock %}">
+<link rel="canonical" href="{{ canonical_url }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Joinly">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="{{ self.title()|trim }}">
+<meta property="og:description" content="{{ self.description()|trim }}">
+<meta property="og:url" content="{{ canonical_url }}">
+<meta property="og:image" content="{{ og_image }}">
+<meta name="theme-color" content="#111738">
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
 <a class="skip" href="#main">Aller au contenu</a>
 <header>
 <nav class="container nav" aria-label="Navigation principale">
 <a href="{{ url_for('home') }}" class="brand">
-<img src="{{ url_for('static',filename='logo.png') }}" width="131" height="40" alt="Joinly — Accueil">
+<img src="{{ url_for('static', filename='logo.png') }}" width="131" height="40" alt="Joinly — Accueil">
 </a>
 <div class="navlinks">
 <a href="{{ url_for('activities') }}">Explorer</a>
@@ -41,10 +51,10 @@
 </nav>
 </header>
 <main id="main">
-{% with messages=get_flashed_messages(with_categories=true) %}
+{% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
 <div class="container notifications" role="status">
-{% for category,message in messages %}
+{% for category, message in messages %}
 <p class="notice {{ category }}">{{ message }}</p>
 {% endfor %}
 </div>
@@ -55,17 +65,31 @@
 </main>
 <footer>
 <div class="container footer">
-<div>
-<strong>Joinly · G1D Lab</strong>
-<p>Des activités. Des rencontres. Des liens.</p>
+<div class="footer-brand">
+<strong>Joinly</strong>
+<p>Découvrir une activité, réserver sa place, faire connaissance.</p>
+<p class="fineprint">Projet étudiant réalisé dans le cadre du G1D Lab à l’ISEP, École d’ingénieurs du numérique.</p>
 </div>
-<nav aria-label="Informations">
+<nav aria-label="Navigation du pied de page">
+<a href="{{ url_for('activities') }}">Explorer</a>
 <a href="{{ url_for('faq') }}">FAQ</a>
 <a href="{{ url_for('contact') }}">Contact</a>
-<a href="{{ url_for('legal',kind='terms') }}">CGU</a>
-<a href="{{ url_for('legal',kind='legal_notice') }}">Mentions légales</a>
+</nav>
+<nav aria-label="Informations légales">
+<a href="{{ url_for('legal', kind='terms') }}">Conditions d’utilisation</a>
+<a href="{{ url_for('legal', kind='legal_notice') }}">Mentions légales</a>
+<a href="{{ url_for('legal', kind='privacy') }}">Politique de confidentialité</a>
 </nav>
 </div>
 </footer>
+<div id="cookie-banner" class="cookie-banner" hidden role="dialog" aria-labelledby="cookie-banner-title" aria-describedby="cookie-banner-text">
+<p id="cookie-banner-title">Cookies nécessaires</p>
+<p id="cookie-banner-text">Joinly dépose uniquement un cookie de session, indispensable à la connexion et à la protection des formulaires. Aucun cookie de mesure d’audience ou publicitaire n’est utilisé.</p>
+<div class="cookie-actions">
+<a href="{{ url_for('legal', kind='privacy') }}#cookies">En savoir plus</a>
+<button type="button" class="small" id="cookie-dismiss">J’ai compris</button>
+</div>
+</div>
+<script src="{{ url_for('static', filename='cookies.js') }}" defer></script>
 </body>
 </html>

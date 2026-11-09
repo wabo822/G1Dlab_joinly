@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 import pytest
 from psycopg.rows import dict_row
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from app import create_app
 
 PASSWORD = 'A sufficiently long test password'
@@ -291,6 +291,96 @@ def test_reset_mail_transport_and_expiry(app, db, monkeypatch):
     db.execute("UPDATE password_resets SET expires_at=now()-interval '1 second'")
     token = sent[0].get_content().strip().rsplit('/',1)[-1]
     assert client.get('/reset-password/'+token).status_code == 400
+
+
+def test_privacy_robots_sitemap_and_meta(app, db):
+    app.config['PUBLIC_BASE_URL'] = 'https://isep.wangjiahan.com'
+    client = app.test_client()
+    privacy = client.get('/legal/privacy')
+    assert privacy.status_code == 200
+    assert 'Politique de confidentialité' in privacy.text
+    assert 'Brevo' in privacy.text and 'CNIL' in privacy.text
+    assert 'cookie' in privacy.text.lower()
+    assert 'id="cookies"' in privacy.text
+    assert 'Document de démonstration' not in privacy.text
+    assert 'à renseigner' not in privacy.text
+    notice = client.get('/legal/legal_notice')
+    assert 'Welfenstraße 22' in notice.text
+    assert 'Jiahan Wang' in notice.text
+    assert 'contact@wangjiahan.com' in notice.text
+    assert 'à renseigner' not in notice.text
+    redirect = client.get('/privacy')
+    assert redirect.status_code == 301
+    assert redirect.headers['Location'].endswith('/legal/privacy')
+    robots = client.get('/robots.txt')
+    assert robots.status_code == 200
+    assert robots.mimetype.startswith('text/plain')
+    assert 'Sitemap: https://isep.wangjiahan.com/sitemap.xml' in robots.text
+    assert 'Disallow: /admin' in robots.text
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    public = event(db, owner)
+    draft = event(db, owner, status='draft')
+    sitemap = client.get('/sitemap.xml')
+    assert sitemap.status_code == 200
+    assert sitemap.mimetype.startswith('application/xml')
+    assert f'https://isep.wangjiahan.com/activities/{public}' in sitemap.text
+    assert f'/activities/{draft}' not in sitemap.text
+    assert 'https://isep.wangjiahan.com/legal/privacy' in sitemap.text
+    home = client.get('/')
+    assert 'property="og:title"' in home.text
+    assert 'rel="canonical"' in home.text
+    assert 'favicon.svg' in home.text
+    assert client.get('/favicon.ico').status_code == 200
+    missing = client.get('/missing')
+    assert missing.status_code == 404
+    assert 'Page introuvable' in missing.text
+
+
+def test_seed_demo_is_idempotent_and_keeps_existing_accounts(app, db):
+    from app.seed_demo import DEMO_PASSWORDS, seed_demo
+    kept = user(db, 'kept@example.test')
+    kept_hash = db.execute('SELECT password_hash FROM users WHERE id=%s', (kept,)).fetchone()['password_hash']
+    custom = generate_password_hash('Already chosen password 123')
+    db.execute(
+        "INSERT INTO users(email, display_name, password_hash) VALUES ('lea.moreau@demo.joinly.fr', 'Déjà présente', %s)",
+        (custom,),
+    )
+    db.execute(
+        "INSERT INTO legal_pages(kind, version, content, published_at) VALUES ('terms', 1, 'Version conservée du projet', now())"
+    )
+    first = seed_demo(db)
+    second = seed_demo(db)
+    assert first['users_created'] >= 39
+    assert second['users_created'] == 0
+    assert second['events_created'] == 0
+    assert second['bookings_created'] == 0
+    assert first['events_created'] == 50
+    assert 40 <= first['demo_users'] <= 46
+    assert first['demo_users'] == second['demo_users']
+    assert first['demo_events'] == second['demo_events'] == 50
+    assert db.execute("SELECT password_hash FROM users WHERE id=%s", (kept,)).fetchone()['password_hash'] == kept_hash
+    stored = db.execute("SELECT password_hash, display_name FROM users WHERE email='lea.moreau@demo.joinly.fr'").fetchone()
+    assert stored['password_hash'] == custom
+    assert stored['display_name'] == 'Déjà présente'
+    admin = db.execute("SELECT password_hash FROM users WHERE email='admin.demo@demo.joinly.fr'").fetchone()
+    assert admin['password_hash'] != DEMO_PASSWORDS['admin']
+    assert check_password_hash(admin['password_hash'], DEMO_PASSWORDS['admin'])
+    overflow = db.execute(
+        """SELECT e.id FROM events e
+           WHERE (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') > e.capacity"""
+    ).fetchone()
+    assert overflow is None
+    assert db.execute("SELECT count(*) AS n FROM reservations").fetchone()['n'] > 30
+    client = app.test_client()
+    assert 'Version conservée du projet' in client.get('/legal/terms').text
+    assert 'Brevo' in client.get('/legal/privacy').text
+    assert client.post('/login', data={'email': 'admin.demo@demo.joinly.fr', 'password': DEMO_PASSWORDS['admin']}).status_code == 302
+    assert client.get('/admin').status_code == 200
+    member = app.test_client()
+    assert member.post('/login', data={'email': 'marie.dupont@demo.joinly.fr', 'password': DEMO_PASSWORDS['member']}).status_code == 302
+    assert 'Balade commentée au Luxembourg' in app.test_client().get('/activities').text
+    draft = db.execute("SELECT id FROM events WHERE title='Atelier calligraphie latine'").fetchone()['id']
+    assert app.test_client().get(f'/activities/{draft}').status_code == 404
 
 
 def test_trusted_proxy_https_forms_and_hosts(app):

@@ -4,24 +4,36 @@ import re
 import secrets
 import smtplib
 import ssl
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 from zoneinfo import ZoneInfo
 
 import click
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
-from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template, request, send_from_directory, session, url_for
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from markupsafe import Markup, escape as html_escape
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from app.legal_content import LEGAL_TEXTS
 
 PARIS = ZoneInfo('Europe/Paris')
 ROOT = Path(__file__).resolve().parents[1]
 DUMMY_HASH = generate_password_hash('not-a-user-password')
+MONTHS_FR = ('janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.')
+LEGAL_TITLES = {
+    'terms': 'Conditions d’utilisation',
+    'legal_notice': 'Mentions légales',
+    'privacy': 'Politique de confidentialité',
+}
+PUBLIC_PATHS = ('/', '/activities', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 
 
 def create_app(config=None):
@@ -38,6 +50,7 @@ def create_app(config=None):
         TRUSTED_HOSTS=[host.strip() for host in os.environ.get('TRUSTED_HOSTS', '').split(',') if host.strip()] or None,
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
+        PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
     )
     if config:
         app.config.update(config)
@@ -85,7 +98,9 @@ def create_app(config=None):
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'same-origin'
         response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
-        if not request.path.startswith('/static/'):
+        if request.path in ('/robots.txt', '/sitemap.xml'):
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+        elif not request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'no-store'
         if app.config['SESSION_COOKIE_SECURE']:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000'
@@ -135,19 +150,26 @@ def create_app(config=None):
 
     @app.errorhandler(ValueError)
     def invalid(error):
-        return render_template('error.html', title='Vérifiez votre saisie', message=str(error)), 400
+        return render_template('error.html', code=400, title='Vérifiez votre saisie', message=str(error)), 400
 
     @app.errorhandler(psycopg.errors.UniqueViolation)
     def duplicate(error):
-        return render_template('error.html', title='Déjà enregistré', message='Cette adresse e-mail ou cette inscription existe déjà.'), 409
+        return render_template('error.html', code=409, title='Déjà enregistré', message='Cette adresse e-mail ou cette inscription existe déjà.'), 409
 
     @app.errorhandler(CSRFError)
     def csrf_error(error):
-        return render_template('error.html', title='Formulaire expiré', message='Rechargez la page et réessayez.'), 400
+        return render_template('error.html', code=400, title='Formulaire expiré', message='Rechargez la page et réessayez.'), 400
 
-    for code, message in {403: 'Vous ne pouvez pas accéder à cette page.', 404: 'Cette page est introuvable.', 413: 'Le formulaire envoyé est trop volumineux.', 429: 'Trop de tentatives. Réessayez dans 15 minutes.', 500: 'Une erreur est survenue. Réessayez plus tard.'}.items():
-        def handler(error, code=code, message=message):
-            return render_template('error.html', title=f'Erreur {code}', message=message), code
+    error_pages = {
+        403: ('Accès refusé', 'Vous ne pouvez pas accéder à cette page.'),
+        404: ('Page introuvable', 'Cette adresse ne correspond à aucune page de Joinly.'),
+        413: ('Envoi trop volumineux', 'Le formulaire envoyé est trop volumineux.'),
+        429: ('Trop de tentatives', 'Trop de tentatives. Réessayez dans 15 minutes.'),
+        500: ('Service momentanément indisponible', 'Une erreur est survenue. Réessayez dans un instant ou écrivez-nous si cela continue.'),
+    }
+    for code, (title, message) in error_pages.items():
+        def handler(error, code=code, title=title, message=message):
+            return render_template('error.html', code=code, title=title, message=message), code
         app.register_error_handler(code, handler)
 
     @app.template_filter('datefr')
@@ -158,9 +180,54 @@ def create_app(config=None):
     def inputdate(value):
         return value.astimezone(PARIS).strftime('%Y-%m-%dT%H:%M') if value else ''
 
+    @app.template_filter('daynum')
+    def daynum(value):
+        return value.astimezone(PARIS).strftime('%d') if value else ''
+
+    @app.template_filter('monthfr')
+    def monthfr(value):
+        return MONTHS_FR[value.astimezone(PARIS).month - 1] if value else ''
+
+    @app.template_filter('timefr')
+    def timefr(value):
+        return value.astimezone(PARIS).strftime('%H:%M') if value else ''
+
+    def slugify(value):
+        normalized = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode()
+        slug = re.sub(r'[^a-z0-9]+', '-', normalized.lower()).strip('-')
+        return slug or 'section'
+
+    @app.template_filter('legal_html')
+    def legal_html(content):
+        parts = []
+        for block in re.split(r'\n\s*\n', (content or '').strip()):
+            block = block.strip()
+            if not block:
+                continue
+            if block.startswith('## '):
+                heading, _, rest = block.partition('\n')
+                title = heading[3:].strip()
+                parts.append(Markup(f'<h2 id="{html_escape(slugify(title))}">{html_escape(title)}</h2>'))
+                block = rest.strip()
+                if not block:
+                    continue
+            lines = [html_escape(line) for line in block.split('\n')]
+            parts.append(Markup('<p>{}</p>').format(Markup('<br>').join(lines)))
+        return Markup('\n').join(parts)
+
+    def public_base():
+        return app.config.get('PUBLIC_BASE_URL') or request.url_root.rstrip('/')
+
     @app.context_processor
     def context():
-        return {'now': datetime.now(timezone.utc)}
+        base = public_base()
+        return {
+            'now': datetime.now(timezone.utc),
+            'public_base_url': base,
+            'canonical_url': base + request.path,
+            'og_image': base + url_for('static', filename='logo.png'),
+            'legal_titles': LEGAL_TITLES,
+        }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category,
         e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available
@@ -403,10 +470,50 @@ def create_app(config=None):
 
     @app.get('/legal/<kind>')
     def legal(kind):
-        if kind not in ('terms', 'legal_notice'):
+        if kind not in LEGAL_TITLES:
             abort(404)
         page = query('SELECT * FROM legal_pages WHERE kind=%s AND published_at IS NOT NULL ORDER BY version DESC LIMIT 1', (kind,), True)
-        return render_template('legal.html', page=page, kind=kind)
+        if page and any(marker in page['content'] for marker in (
+            'Document de démonstration', 'à renseigner', 'restent à renseigner', 'Prototype pédagogique Joinly',
+        )):
+            page = None
+        content = page['content'] if page else LEGAL_TEXTS[kind]
+        return render_template('legal.html', page=page, kind=kind, content=content)
+
+    @app.get('/privacy')
+    def privacy_redirect():
+        return redirect(url_for('legal', kind='privacy'), code=301)
+
+    @app.get('/robots.txt')
+    def robots():
+        base = public_base()
+        body = (
+            'User-agent: *\n'
+            'Allow: /\n'
+            'Disallow: /admin\n'
+            'Disallow: /account\n'
+            'Disallow: /organizer\n'
+            'Disallow: /reset-password/\n'
+            '\n'
+            f'Sitemap: {base}/sitemap.xml\n'
+        )
+        return app.response_class(body, mimetype='text/plain; charset=utf-8')
+
+    @app.get('/sitemap.xml')
+    def sitemap():
+        base = public_base()
+        urls = [base + path for path in PUBLIC_PATHS]
+        for row in query("SELECT id FROM events WHERE status='published' ORDER BY id"):
+            urls.append(base + url_for('detail', event_id=row['id']))
+        body = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+        for loc in urls:
+            body.append(f'  <url><loc>{xml_escape(loc)}</loc></url>')
+        body.append('</urlset>')
+        return app.response_class('\n'.join(body) + '\n', mimetype='application/xml; charset=utf-8')
+
+    @app.get('/favicon.ico')
+    def favicon():
+        return send_from_directory(app.static_folder, 'favicon.svg', mimetype='image/svg+xml')
 
     @app.route('/contact', methods=['GET', 'POST'])
     def contact():
@@ -466,7 +573,7 @@ def create_app(config=None):
     @require('admin')
     def admin_legal():
         kind = text('kind')
-        if kind not in ('terms', 'legal_notice'):
+        if kind not in LEGAL_TITLES:
             abort(400)
         content = text('content', 30000)
         with db().transaction():
@@ -562,5 +669,22 @@ def create_app(config=None):
         for table in ('web_sessions', 'password_resets', 'rate_limits'):
             db().execute(f'DELETE FROM {table} WHERE expires_at<now()')
         click.echo('Expired sessions, tokens and rate limits removed.')
+
+    @app.cli.command('seed-demo')
+    def seed_demo_command():
+        """Insert idempotent demonstration accounts, activities and registrations."""
+        from app.seed_demo import seed_demo
+        try:
+            stats = seed_demo(db())
+        except RuntimeError as error:
+            raise click.ClickException(str(error))
+        click.echo(
+            'Demonstration data ready: '
+            f"{stats['users_created']} new accounts, "
+            f"{stats['events_created']} new activities, "
+            f"{stats['bookings_created']} new registrations "
+            f"({stats['demo_users']} demo accounts, {stats['demo_events']} demo activities in total)."
+        )
+        click.echo('Credentials: docs/demo-accounts.md')
 
     return app

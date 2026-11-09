@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% block title %}Administration — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
 {% block content %}
 <section class="container section">
 <p class="eyebrow">ADMINISTRATION</p>
@@ -53,9 +55,9 @@
 {% endfor %}
 </div>
 <h2 id="legal">Pages légales</h2>
-<p>Chaque publication conserve une nouvelle version. Les informations de l’éditeur et de l’hébergeur doivent être validées avant ouverture au public.</p>
-<div class="two">
-{% for kind,label in [('terms','CGU'),('legal_notice','Mentions légales')] %}
+<p>Chaque enregistrement publie une nouvelle version. La version la plus récente est celle affichée sur le site. Les versions précédentes sont conservées.</p>
+<div class="legal-forms">
+{% for kind, label in [('terms','Conditions d’utilisation'),('legal_notice','Mentions légales'),('privacy','Politique de confidentialité')] %}
 {% set latest=pages|selectattr('kind','equalto',kind)|first %}
 <form class="panel stack" method="post" action="{{ url_for('admin_legal') }}">
 <h3>{{ label }}</h3>
@@ -81,7 +83,10 @@
 </form>
 </article>
 {% else %}
-<p>Aucune demande reçue.</p>
+<div class="empty">
+<h3>Aucune demande reçue.</h3>
+<p>Les messages envoyés depuis le formulaire de contact apparaîtront ici.</p>
+</div>
 {% endfor %}
 </section>
 {% endblock %}
