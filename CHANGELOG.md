@@ -1,5 +1,20 @@
 # Journal des modifications
 
+## 2026-11-09 — Favoris, abonnements et profil organisateur
+
+Chaque membre peut mettre une activité en favori et suivre un organisateur. Mon espace liste « Mes favoris » et « Organisateurs suivis ». La page publique `/organisateurs/<id>` montre les activités publiées, la note moyenne et le nombre d’abonnés.
+
+### Fichiers
+
+- `database/migrations/007_favorites_follows.sql` — tables `favorites` et `organizer_follows`.
+- `app/__init__.py` — bascules, page publique, listes du compte, sitemap.
+- `app/seed_demo.py` — favoris et abonnements des comptes `@demo.joinly.fr` seulement, sans doublon.
+- `app/templates/detail.html`, `account.html`, `organizer_public.html`
+- `tests/test_app.py`
+- `CHANGELOG.md`
+
+Cette pull request est empilée sur les avis (#5) et le cycle de vie (#4).
+
 ## 2026-11-09 — Avis et notes
 
 Après la fin d’une activité, chaque participant dont l’inscription est encore confirmée peut laisser une note de 1 à 5 et un commentaire. Un seul avis par personne et par activité, modifiable. La moyenne et le nombre d’avis s’affichent sur les cartes et la fiche. L’administrateur peut masquer un avis : il sort alors de la moyenne et de la liste publique.

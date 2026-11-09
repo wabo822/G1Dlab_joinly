@@ -490,7 +490,18 @@ def create_app(config=None):
         )
         mine = next((row for row in reviews if g.user and row['author_id'] == g.user['id']), None)
         can_review = bool(booking and event['status'] == 'published' and is_finished(event))
-        return render_template('detail.html', event=event, booking=booking, reviews=reviews, mine=mine, can_review=can_review)
+        favorited = following = False
+        if g.user:
+            favorited = bool(query('SELECT 1 FROM favorites WHERE user_id=%s AND event_id=%s', (g.user['id'], event_id), True))
+            following = bool(query(
+                'SELECT 1 FROM organizer_follows WHERE follower_id=%s AND organizer_id=%s',
+                (g.user['id'], event['organizer_id']),
+                True,
+            ))
+        return render_template(
+            'detail.html', event=event, booking=booking, reviews=reviews, mine=mine,
+            can_review=can_review, favorited=favorited, following=following,
+        )
 
     @app.post('/activities/<int:event_id>/avis')
     @require()
@@ -525,6 +536,84 @@ def create_app(config=None):
             )
             flash('Merci, votre avis est publié.', 'success')
         return redirect(url_for('detail', event_id=event_id))
+
+    @app.post('/activities/<int:event_id>/favori')
+    @require()
+    def toggle_favorite(event_id):
+        if not query("SELECT id FROM events WHERE id=%s AND status='published'", (event_id,), True):
+            abort(404)
+        existing = query('SELECT 1 FROM favorites WHERE user_id=%s AND event_id=%s', (g.user['id'], event_id), True)
+        if existing:
+            db().execute('DELETE FROM favorites WHERE user_id=%s AND event_id=%s', (g.user['id'], event_id))
+            flash('Retiré de vos favoris.', 'success')
+        else:
+            db().execute('INSERT INTO favorites(user_id, event_id) VALUES (%s, %s)', (g.user['id'], event_id))
+            flash('Ajouté à vos favoris.', 'success')
+        return redirect(url_for('detail', event_id=event_id))
+
+    @app.post('/organisateurs/<int:user_id>/suivre')
+    @require()
+    def toggle_follow(user_id):
+        if user_id == g.user['id']:
+            raise ValueError('Vous ne pouvez pas vous suivre vous-même.')
+        organizer = query(
+            '''SELECT u.id FROM users u
+               JOIN user_roles ur ON ur.user_id=u.id
+               JOIN roles r ON r.id=ur.role_id AND r.name='organizer'
+               WHERE u.id=%s AND u.status='active' ''',
+            (user_id,),
+            True,
+        )
+        if not organizer:
+            abort(404)
+        existing = query(
+            'SELECT 1 FROM organizer_follows WHERE follower_id=%s AND organizer_id=%s',
+            (g.user['id'], user_id),
+            True,
+        )
+        if existing:
+            db().execute(
+                'DELETE FROM organizer_follows WHERE follower_id=%s AND organizer_id=%s',
+                (g.user['id'], user_id),
+            )
+            flash('Vous ne suivez plus cet organisateur.', 'success')
+        else:
+            db().execute(
+                'INSERT INTO organizer_follows(follower_id, organizer_id) VALUES (%s, %s)',
+                (g.user['id'], user_id),
+            )
+            flash('Organisateur suivi.', 'success')
+        return redirect(url_for('organizer_public', user_id=user_id))
+
+    @app.get('/organisateurs/<int:user_id>')
+    def organizer_public(user_id):
+        person = query(
+            '''SELECT u.id, u.display_name,
+                      (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers,
+                      (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv
+                         JOIN events e ON e.id=rv.event_id
+                        WHERE e.organizer_id=u.id AND NOT rv.hidden) AS rating_avg,
+                      (SELECT count(*) FROM reviews rv JOIN events e ON e.id=rv.event_id
+                        WHERE e.organizer_id=u.id AND NOT rv.hidden) AS rating_count
+               FROM users u
+               JOIN user_roles ur ON ur.user_id=u.id
+               JOIN roles r ON r.id=ur.role_id AND r.name='organizer'
+               WHERE u.id=%s AND u.status='active' ''',
+            (user_id,),
+            True,
+        )
+        if not person:
+            abort(404)
+        events = query(
+            event_select + " WHERE e.organizer_id=%s AND e.status='published' ORDER BY e.starts_at DESC",
+            (user_id,),
+        )
+        following = bool(g.user and query(
+            'SELECT 1 FROM organizer_follows WHERE follower_id=%s AND organizer_id=%s',
+            (g.user['id'], user_id),
+            True,
+        ))
+        return render_template('organizer_public.html', person=person, events=events, following=following)
 
     @app.route('/signup', methods=['GET', 'POST'])
     def signup():
@@ -615,9 +704,23 @@ def create_app(config=None):
         moment = datetime.now(timezone.utc)
         upcoming = [row for row in bookings if row['status'] == 'confirmed' and row['ends_at'] > moment]
         history = [row for row in bookings if row not in upcoming]
+        favorites = query(
+            event_select + ''' WHERE e.id IN (SELECT event_id FROM favorites WHERE user_id=%s)
+               ORDER BY e.starts_at''',
+            (g.user['id'],),
+        )
+        followed = query(
+            '''SELECT u.id, u.display_name,
+                      (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers
+               FROM organizer_follows mine
+               JOIN users u ON u.id=mine.organizer_id
+               WHERE mine.follower_id=%s ORDER BY u.display_name''',
+            (g.user['id'],),
+        )
         selected = {row['category_id'] for row in query('SELECT category_id FROM user_interests WHERE user_id=%s', (g.user['id'],))}
         return render_template(
-            'account.html', preferences=prefs, bookings=upcoming, history=history, selected=selected, interest_minimum=minimum,
+            'account.html', preferences=prefs, bookings=upcoming, history=history, favorites=favorites,
+            followed=followed, selected=selected, interest_minimum=minimum,
             categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
         )
 
@@ -820,6 +923,14 @@ def create_app(config=None):
         urls = [base + path for path in PUBLIC_PATHS]
         for row in query("SELECT id FROM events WHERE status='published' ORDER BY id"):
             urls.append(base + url_for('detail', event_id=row['id']))
+        for row in query(
+            '''SELECT DISTINCT u.id FROM users u
+               JOIN user_roles ur ON ur.user_id=u.id
+               JOIN roles r ON r.id=ur.role_id AND r.name='organizer'
+               JOIN events e ON e.organizer_id=u.id AND e.status='published'
+               WHERE u.status='active' ORDER BY u.id'''
+        ):
+            urls.append(base + url_for('organizer_public', user_id=row['id']))
         body = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
         for loc in urls:
             body.append(f'  <url><loc>{xml_escape(loc)}</loc></url>')

@@ -25,7 +25,7 @@ centres d’intérêt. La page d’accueil propose « Recommandé pour vous » e
 classement « Tendances ». Une activité peut être gratuite ou avoir un prix en
 euros ; le paiement est simulé, sans encaissement.
 
-Le tri par note est disponible (`sort=rating`) : il utilise la moyenne des avis visibles.
+Le tri par note est disponible (`sort=rating`) : il utilise la moyenne des avis visibles. On peut mettre une activité en favori, suivre un organisateur, et ouvrir sa page publique.
 
 Une activité devient **Terminée** quand son heure de fin est passée (Europe/Paris), sans tâche planifiée. Elle quitte l’accueil, le classement et la liste par défaut, reste visible par son lien, et se retrouve dans l’historique du participant ainsi que via « Voir les activités passées ». Les inscriptions se ferment aussi `BOOKING_CUTOFF_MINUTES` minutes avant le début (0 par défaut). La liste `/activities` se filtre par mot-clé, lieu, ville, catégorie, dates et prix, puis se trie et se pagine dans l’URL.
 

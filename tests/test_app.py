@@ -436,6 +436,15 @@ def test_seed_demo_is_idempotent_and_keeps_existing_accounts(app, db):
     ).fetchone()['n'] == 0
     seed_demo(db)
     assert db.execute('SELECT count(*) AS n FROM reviews').fetchone()['n'] == review_count
+    assert db.execute(
+        "SELECT count(*) AS n FROM favorites f JOIN users u ON u.id=f.user_id WHERE u.email='kept@example.test'"
+    ).fetchone()['n'] == 0
+    follows = db.execute('SELECT count(*) AS n FROM organizer_follows').fetchone()['n']
+    favorites = db.execute('SELECT count(*) AS n FROM favorites').fetchone()['n']
+    assert follows > 0 and favorites > 0
+    seed_demo(db)
+    assert db.execute('SELECT count(*) AS n FROM organizer_follows').fetchone()['n'] == follows
+    assert db.execute('SELECT count(*) AS n FROM favorites').fetchone()['n'] == favorites
     assert member.get('/').status_code == 200
     assert 'Recommandé pour vous' in member.get('/').text
 
@@ -711,3 +720,26 @@ def test_reviews_are_unique_editable_and_moderated(app, db):
         'SELECT rating_count FROM (SELECT (SELECT count(*) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_count FROM events e WHERE e.id=%s) s',
         (eid,),
     ).fetchone()['rating_count'] == 0
+
+
+def test_favorites_follows_and_public_organizer_profile(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    guest = user(db, 'guest@example.test')
+    plain = user(db, 'plain@example.test')
+    eid = event(db, owner, 4)
+    db.execute("UPDATE events SET title='Balade favorite' WHERE id=%s", (eid,))
+    client = login(app, 'guest@example.test')
+    assert client.post(f'/activities/{eid}/favori').status_code == 302
+    assert 'Balade favorite' in client.get('/account').text
+    assert 'Retirer des favoris' in client.get(f'/activities/{eid}').text
+    assert client.post(f'/activities/{eid}/favori').status_code == 302
+    assert 'Balade favorite' not in client.get('/account').text.split('Mes favoris', 1)[1].split('Organisateurs suivis', 1)[0]
+    assert client.post(f'/organisateurs/{plain}/suivre').status_code == 404
+    assert client.post(f'/organisateurs/{guest}/suivre').status_code == 400
+    assert client.post(f'/organisateurs/{owner}/suivre').status_code == 302
+    profile = app.test_client().get(f'/organisateurs/{owner}')
+    assert profile.status_code == 200
+    assert 'Balade favorite' in profile.text and '1 abonné' in profile.text
+    assert 'owner' in client.get('/account').text
+    assert client.post(f'/organisateurs/{owner}/suivre').status_code == 302
+    assert '1 abonné' not in app.test_client().get(f'/organisateurs/{owner}').text
