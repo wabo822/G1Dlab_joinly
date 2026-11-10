@@ -127,8 +127,8 @@ def organizer_payload(query, owner_id, days):
         'chart': line_chart([row['n'] for row in series] or [0], [row['label'] for row in series] or ['—']),
         'fill_chart': bar_chart(
             [round(100 * row['booked'] / row['capacity']) if row['capacity'] else 0 for row in fills] or [0],
-            [row['title'][:18] for row in fills] or ['—'],
-            color='#7046e8',
+            [row['title'] for row in fills] or ['—'],
+            color='#7046e8', suffix=' %',
         ),
         'category_chart': donut_chart(
             [row['n'] for row in categories] or [0],

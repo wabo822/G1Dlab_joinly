@@ -1235,3 +1235,125 @@ hr {
 .avatar-c7 { background:#3b4a8a; }
 .avatar-c8 { background:#0e7c7b; }
 .avatar-c9 { background:#9b2d4a; }
+
+.dash-grid .panel {
+  min-width:0;
+}
+.chart-line {
+  display:block;
+  width:100%;
+  height:auto;
+  margin-top:8px;
+  overflow:visible;
+}
+.chart-donut {
+  display:flex;
+  align-items:center;
+  gap:16px 20px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+.chart-donut-plot {
+  flex:0 0 160px;
+  width:160px;
+  height:160px;
+  display:block;
+}
+.chart-legend {
+  list-style:none;
+  margin:0;
+  padding:0;
+  flex:1 1 140px;
+  min-width:0;
+}
+.chart-legend li {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:0 0 7px;
+  font-size:.88rem;
+  line-height:1.35;
+}
+.chart-legend-label {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.chart-legend-count {
+  color:#505873;
+  font-weight:650;
+  white-space:nowrap;
+}
+.chart-swatch {
+  width:10px;
+  height:10px;
+  border-radius:2px;
+  flex-shrink:0;
+  margin-top:5px;
+}
+.chart-swatch-0 { background:#2066fa; }
+.chart-swatch-1 { background:#7046e8; }
+.chart-swatch-2 { background:#c44b7a; }
+.chart-swatch-3 { background:#c56a1a; }
+.chart-swatch-4 { background:#1f7a4d; }
+.chart-swatch-5 { background:#1954ca; }
+.chart-swatch-6 { background:#0e7c7b; }
+.chart-swatch-7 { background:#8a4b12; }
+.chart-swatch-a { background:#1f7a4d; }
+.chart-swatch-b { background:#c56a1a; }
+.chart-key {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px 14px;
+  margin:0 0 10px;
+  font-size:.82rem;
+  color:#505873;
+}
+.chart-key .chart-swatch {
+  margin-top:0;
+}
+.chart-bars {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:8px;
+  min-width:0;
+}
+.chart-bar-row {
+  display:grid;
+  grid-template-columns:minmax(0,9.5rem) minmax(4rem,1fr) auto;
+  align-items:center;
+  gap:8px 10px;
+  min-width:0;
+}
+.chart-bar-label {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.86rem;
+  line-height:1.3;
+  min-width:0;
+}
+.chart-bar-track {
+  display:block;
+  width:100%;
+  height:10px;
+  min-width:0;
+}
+.chart-bar-value {
+  font-size:.82rem;
+  font-weight:700;
+  color:#111738;
+  white-space:nowrap;
+  text-align:right;
+}
+@media(max-width:800px) {
+  .chart-bar-row {
+    grid-template-columns:minmax(0,7.5rem) minmax(3.5rem,1fr) auto;
+  }
+  .chart-donut-plot {
+    flex-basis:140px;
+    width:140px;
+    height:140px;
+  }
+}

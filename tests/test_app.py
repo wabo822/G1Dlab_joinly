@@ -1395,3 +1395,33 @@ def test_booking_requires_confirmation_checkbox_and_uses_one_paid_step(app, db):
         data={'confirm': '1', 'acknowledged': '1', 'payment_simulated': '1'},
     ).status_code == 302
     assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (paid,)).fetchone()['n'] == 1
+
+def test_dashboard_charts_keep_labels_readable():
+    from app.charts import bar_chart, donut_chart, line_chart, stacked_bar
+
+    long_name = 'Atelier calligraphie et encres de Chine pour un après-midi concentré'
+    bars = bar_chart([40, 12], [long_name, 'Court'], suffix=' %')
+    assert 'chart-bar-row' in bars
+    assert '40 %' in bars and '12 %' in bars
+    assert long_name in bars
+    assert 'text-overflow' not in bars  # ellipsis is CSS, not inline
+    assert 'style=' not in bars
+
+    donut = donut_chart([8, 3, 1], ['Nature & plein air', 'Langues & échanges', 'Jeux & rencontres'])
+    assert 'Nature &amp; plein air' in donut and '(8)' in donut
+    assert 'Langues &amp; échanges' in donut and '(3)' in donut
+    assert 'chart-legend' in donut
+    assert 'style=' not in donut
+    # legend lives outside the tight donut viewBox
+    svg = donut[donut.find('<svg'):donut.find('</svg>')]
+    assert 'Nature' not in svg and 'Langues' not in svg
+
+    stacked = stacked_bar([4], [2], ['16/11'])
+    assert 'Contrôlés' in stacked and 'Non présentés' in stacked
+    assert '16/11' in stacked and '4 / 6' in stacked
+    assert 'style=' not in stacked
+
+    labels = [f'{day:02d}/10' for day in range(1, 31)]
+    line = line_chart(list(range(30)), labels)
+    assert '01/10' in line and '30/10' in line
+    assert line.count('<text ') <= 8
