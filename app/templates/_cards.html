@@ -2,6 +2,9 @@
 {% for event in events %}
 <article class="activity">
 <div class="card-art art-{{ loop.index0 % 4 }}">
+{% if event.cover_href %}
+<img class="cover" src="{{ event.cover_href }}" alt="">
+{% endif %}
 {% if event.rank %}
 <span class="rank-badge rank-{{ event.rank if event.rank < 4 else 'n' }}"><span class="sr-only">Rang </span>{{ event.rank }}</span>
 {% endif %}

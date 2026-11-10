@@ -743,3 +743,56 @@ def test_favorites_follows_and_public_organizer_profile(app, db):
     assert 'owner' in client.get('/account').text
     assert client.post(f'/organisateurs/{owner}/suivre').status_code == 302
     assert '1 abonné' not in app.test_client().get(f'/organisateurs/{owner}').text
+
+
+def test_cover_library_is_stable_and_uploads_are_private(app, db, tmp_path):
+    import base64
+    import io
+    from pathlib import Path
+    from app.covers import SLUGS, auto_cover_index, library_files, pick_auto, pick_list
+    app.config['UPLOAD_DIR'] = str(tmp_path)
+    for name in SLUGS:
+        files = library_files(name)
+        assert 12 <= len(files) <= 15
+        for filename in files:
+            path = Path('app/static/covers') / SLUGS[name] / filename
+            assert path.stat().st_size < 150_000
+    sample = library_files('Cuisine')
+    assert pick_auto(4, sample) == pick_auto(4, sample)
+    shared = auto_cover_index(1, len(sample))
+    twin = next(index for index in range(2, 8000) if auto_cover_index(index, len(sample)) == shared)
+    assert pick_list([(1, sample, None), (twin, sample, None)])[0] != pick_list([(1, sample, None), (twin, sample, None)])[1]
+    assert pick_list([(1, sample, 'custom.webp')]) == ['custom.webp']
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    user(db, 'admin@example.test', ('member', 'admin'), interests=False)
+    cuisine = db.execute("SELECT id FROM categories WHERE name='Cuisine'").fetchone()['id']
+    sport = db.execute("SELECT id FROM categories WHERE name='Sport'").fetchone()['id']
+    eid = event(db, owner)
+    db.execute("UPDATE events SET category_id=%s, title='Atelier couvert' WHERE id=%s", (cuisine, eid))
+    assert 'covers/cuisine/' in app.test_client().get(f'/activities/{eid}').text
+    organizer = login(app, 'owner@example.test')
+    form = event_form(db, eid, category_id=str(sport))
+    assert organizer.post(f'/organizer/{eid}/edit', data=form).status_code == 302
+    assert 'covers/sport/' in app.test_client().get(f'/activities/{eid}').text
+    png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
+    uploaded = event_form(db, eid)
+    uploaded['cover'] = (io.BytesIO(png), 'point.png')
+    assert organizer.post(f'/organizer/{eid}/edit', data=uploaded, content_type='multipart/form-data').status_code == 302
+    with_file = app.test_client().get(f'/activities/{eid}').text
+    assert '/media/e' in with_file
+    moved = event_form(db, eid, category_id=str(cuisine))
+    assert organizer.post(f'/organizer/{eid}/edit', data=moved).status_code == 302
+    assert '/media/e' in app.test_client().get(f'/activities/{eid}').text
+    rejected = event_form(db, eid)
+    rejected['cover'] = (io.BytesIO(b'this is not an image file'), 'note.png')
+    assert organizer.post(f'/organizer/{eid}/edit', data=rejected, content_type='multipart/form-data').status_code == 400
+    assert app.test_client().get('/media/e1-0123456789abcdef.webp').status_code == 404
+    admin = login(app, 'admin@example.test')
+    assert admin.get('/admin/couvertures').status_code == 200
+    assert 'covers/cuisine/01.webp' in admin.get('/admin/couvertures').text
+    assert organizer.get('/admin/couvertures').status_code == 403
+    chosen = 'covers/cuisine/03.webp'
+    assert admin.post(f'/admin/events/{eid}/cover', data={'cover_choice': chosen}).status_code == 302
+    assert chosen in app.test_client().get(f'/activities/{eid}').text
+    assert admin.post(f'/admin/events/{eid}/cover', data={'cover_choice': 'auto'}).status_code == 302
+    assert 'covers/cuisine/' in app.test_client().get(f'/activities/{eid}').text

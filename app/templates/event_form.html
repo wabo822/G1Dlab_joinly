@@ -5,7 +5,7 @@
 <section class="container section narrow">
 <a href="{{ url_for('organizer') }}">← Mes activités</a>
 <h1>{{ 'Modifier' if event else 'Créer' }} une activité</h1>
-<form method="post" class="panel stack">
+<form method="post" class="panel stack" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Titre<input name="title" value="{{ event.title if event else '' }}" maxlength="180" required>
 </label>
@@ -30,6 +30,9 @@
 </label>
 <label>Prix en euros<input name="price" inputmode="decimal" maxlength="8" value="{% if event %}{{ event.price_cents // 100 }},{{ '%02d'|format(event.price_cents % 100) }}{% else %}0,00{% endif %}" required>
 <small>0 = gratuit. Un prix supérieur affiche une confirmation de paiement simulé, sans encaissement.</small>
+</label>
+<label>Image de couverture<input type="file" name="cover" accept="image/jpeg,image/png,image/webp">
+<small>JPEG, PNG ou WebP, 2 Mo maximum. Sans fichier, une illustration de la catégorie est choisie automatiquement.</small>
 </label>
 <label>Publication<select name="status">
 <option value="draft" {% if event and event.status=='draft' %}selected{% endif %}>Enregistrer comme brouillon</option>

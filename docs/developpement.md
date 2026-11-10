@@ -205,7 +205,11 @@ Les mots de passe utilisent scrypt. Les sessions sont conservées côté serveur
 forme de hachages de jetons, expirent après 12 heures et sont révoquées à la
 déconnexion, suspension, modification des habilitations ou changement d’identifiants.
 Les formulaires POST exigent un jeton CSRF. Les modèles échappent les textes saisis.
-Les formulaires sont limités à 64 KiB et les connexions, inscriptions, contacts et
+Les formulaires texte restent courts ; une image de couverture peut aller jusqu’à 2 Mo
+(requête limitée à 3 Mo). En production, Nginx autorise `client_max_body_size 3m`
+et les fichiers sont écrits dans `/var/lib/joinly/uploads` (`JOINLY_UPLOAD_DIR`),
+dossier persistant hors des releases, accessible en écriture au service grâce à
+`ReadWritePaths`. Les connexions, inscriptions, contacts et
 réinitialisations disposent de limites de débit persistantes.
 
 Toutes les écritures liées à la capacité verrouillent la ligne de l’événement dans

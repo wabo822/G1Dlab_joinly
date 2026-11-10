@@ -13,6 +13,7 @@ fi
 if ! id joinly >/dev/null 2>&1; then
   useradd --system --home-dir /var/lib/joinly --create-home --shell /usr/sbin/nologin joinly
 fi
+install -d -o joinly -g joinly -m 750 /var/lib/joinly/uploads
 install -d -m 755 /opt/joinly/releases
 release_dir=$(mktemp -d /opt/joinly/releases/v1-XXXXXXXX)
 chmod 755 "$release_dir"

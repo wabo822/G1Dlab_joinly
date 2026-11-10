@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Bibliothèque d’images — Administration — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section">
+<p class="eyebrow">ADMINISTRATION</p>
+<h1>Illustrations par catégorie</h1>
+<p>Treize visuels originaux par catégorie. Sans image envoyée par l’organisateur, l’activité en reçoit un de façon stable à partir de son identifiant.</p>
+{% for group in library %}
+<h2>{{ group.name }}</h2>
+<div class="cards">
+{% for image in group.files %}
+<article class="activity">
+<img src="{{ url_for('static', filename=image.path) }}" alt="{{ group.name }} {{ image.name }}" width="400" height="225">
+</article>
+{% endfor %}
+</div>
+{% endfor %}
+</section>
+{% endblock %}

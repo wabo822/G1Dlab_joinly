@@ -284,6 +284,18 @@ button:disabled {
 .activity:hover {
   box-shadow:0 10px 30px #11173812;
 }
+.card-art img.cover,.detail-art img.cover {
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:0;
+}
+.card-art>span,.card-art strong,.card-art .art-label,.detail-art span {
+  position:relative;
+  z-index:1;
+}
 .card-art {
   height:190px;
   padding:22px;
