@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Mes accès MCP — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section narrow stack">
+<a href="{{ url_for('account') }}">← Mon espace</a>
+<p class="eyebrow">INTÉGRATIONS</p><h1>Connecter votre assistant.</h1>
+<p>MCP permet à un assistant compatible de consulter Joinly. Chaque accès appartient à votre compte et expire après 30 jours. Une réservation nécessite toujours votre confirmation sur le site.</p>
+<div class="panel stack"><h2>Adresse du serveur</h2><code>{{ endpoint }}</code>
+<p>Transport : Streamable HTTP. Authentification : en-tête <code>Authorization: Bearer VOTRE_JETON</code>. Choisissez un client acceptant un jeton configuré manuellement.</p></div>
+{% if secret %}<div class="panel stack"><h2>Votre nouveau jeton</h2><p>Copiez-le maintenant : il ne sera plus affiché. Il donne les accès choisis ci-dessous ; gardez-le privé et ne le collez pas dans une conversation.</p><label>Jeton à copier<input readonly value="{{ secret }}" autocomplete="off"></label></div>{% endif %}
+<form method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<h2>Créer un accès</h2><label>Nom de l’assistant<input name="label" maxlength="80" required placeholder="Mon assistant personnel"></label>
+<p>La recherche d’activités et la FAQ publiques sont incluses.</p>
+<label class="check"><input type="checkbox" name="scopes" value="bookings:read">Autoriser la lecture de mes inscriptions</label>
+<label class="check"><input type="checkbox" name="scopes" value="bookings:write">Autoriser la préparation de réservations à confirmer sur Joinly</label>
+<p class="muted">Les données autorisées seront accessibles au client connecté et à son fournisseur d’IA selon leur fonctionnement.</p>
+<button>Créer le jeton</button>
+</form>
+<h2>Mes accès</h2>
+{% for token in tokens %}<article class="panel stack"><h3>{{ token.label }}</h3><p>{{ token.scopes|join(' · ') }}</p><p>Expiration : {{ token.expires_at|datefr }}</p>
+{% if token.revoked_at %}<p>Révoqué</p>{% else %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="token_id" value="{{ token.id }}"><button class="secondary">Révoquer cet accès</button></form>{% endif %}
+</article>{% else %}<p>Aucun accès créé.</p>{% endfor %}
+</section>
+{% endblock %}

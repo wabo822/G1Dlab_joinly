@@ -10,6 +10,7 @@
   const send = document.getElementById('chat-send');
   const consent = document.getElementById('chat-consent');
   const profile = document.getElementById('chat-profile');
+  const bookings = document.getElementById('chat-bookings');
   const log = document.getElementById('chat-messages');
   const status = document.getElementById('chat-status');
   const clear = document.getElementById('chat-clear');
@@ -85,6 +86,7 @@
   // Revoking either consent also removes previously shared context from local history.
   consent.addEventListener('change', () => { if (!consent.checked) reset(); });
   if (profile) profile.addEventListener('change', reset);
+  if (bookings) bookings.addEventListener('change', reset);
   suggestions.addEventListener('click', event => {
     const button = event.target.closest('[data-prompt]');
     if (!button || busy) return;
@@ -110,7 +112,7 @@
       const response = await fetch(root.dataset.endpoint, {
         method:'POST', credentials:'same-origin', signal:controller.signal,
         headers:{'Content-Type':'application/json', 'X-CSRFToken':form.elements.csrf_token.value},
-        body:JSON.stringify({message, history:previous, consent:true, use_profile:Boolean(profile && profile.checked)})
+        body:JSON.stringify({message, history:previous, consent:true, use_profile:Boolean(profile && profile.checked), use_bookings:Boolean(bookings && bookings.checked)})
       });
       const data = await response.json().catch(() => ({}));
       if (current !== generation) return;
@@ -118,8 +120,17 @@
         throw new Error(data.error || (response.status === 400 ? 'Session expirée. Rechargez la page puis réessayez.' : 'Le service est indisponible. Réessayez dans un instant.'));
       }
       addMessage(data.answer, 'assistant', data.links || {});
+      for (const action of (data.actions || [])) {
+        if (!data.links || !Object.hasOwn(data.links, action.url)) continue;
+        const link = document.createElement('a');
+        link.className = 'button small chat-booking-action';
+        link.href = action.url;
+        link.textContent = action.label;
+        log.lastElementChild.append(link);
+      }
+      log.scrollTop = log.scrollHeight;
       history = [...previous, {role:'user',content:message}, {role:'assistant',content:data.answer}].slice(-8);
-      status.textContent = data.profile_used ? 'Réponse avec vos préférences autorisées.' : 'Réponse avec le contexte public de Joinly.';
+      status.textContent = data.bookings_access ? 'Accès à vos inscriptions autorisé pour cet échange.' : (data.profile_used ? 'Réponse avec vos préférences autorisées.' : 'Réponse avec le contexte public de Joinly.');
     } catch (error) {
       if (current !== generation) return;
       addMessage(error.name === 'AbortError' ? 'La réponse prend trop de temps. Réessayez dans un instant.' : error.message, 'assistant');

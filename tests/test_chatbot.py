@@ -9,7 +9,7 @@ from app import chatbot
 def assistant(app, monkeypatch):
     app.config.update(DEEPSEEK_API_KEY='test-private-key', CHAT_DAILY_LIMIT=100)
     calls = []
-    def reply(config, messages):
+    def reply(config, messages, **kwargs):
         calls.append(messages)
         return 'Consultez [Explorer](/activities).'
     monkeypatch.setattr(chatbot, 'completion', reply)
@@ -73,7 +73,7 @@ def test_csrf(assistant, app):
 
 def test_quota_and_failure_unlock(assistant, app, monkeypatch):
     client,calls = assistant
-    def fail(*args): raise chatbot.ProviderUnavailable('TimeoutError')
+    def fail(*args, **kwargs): raise chatbot.ProviderUnavailable('TimeoutError')
     original = chatbot.completion
     monkeypatch.setattr(chatbot,'completion',fail)
     assert ask(client).status_code == 503

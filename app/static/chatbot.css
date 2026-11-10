@@ -46,3 +46,4 @@
  .chat-disclosure { max-height:45px; overflow:auto; }
  .chat-suggestions { display:none; }
 }
+.chat-message a.chat-booking-action { display:block; margin-top:10px; color:#fff; white-space:normal; text-align:center; }

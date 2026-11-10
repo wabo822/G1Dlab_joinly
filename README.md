@@ -92,8 +92,7 @@ un véritable RAG. Une recherche documentaire automatique reste une évolution.
 Les disponibilités proviennent de la base métier et doivent être revérifiées
 lors de la réservation. Le modèle ne peut pas inventer d'activité ou de place.
 
-L'assistant propose et explique, mais ne réserve, n'annule ni ne modifie le
-profil. L'utilisateur agit dans les écrans habituels. Le profil d'autrui reste
+L'assistant propose et explique, consulte les inscriptions avec autorisation et prépare une réservation. L'utilisateur confirme sur Joinly avant qu'une place soit attribuée. Il n'annule ni ne modifie le profil. Les outils sont également accessibles par [MCP](docs/mcp.md). Le profil d'autrui reste
 inaccessible. L'utilisation de son profil est facultative et désactivable.
 Pour la démonstration via API, utiliser des profils fictifs et une documentation
 publique validée. Les clés API et les appels restent côté serveur, avec quotas,

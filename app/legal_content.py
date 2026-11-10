@@ -224,9 +224,14 @@ Jiahan Wang — Joinly, projet étudiant G1D Lab, ISEP, 10 rue de Vanves, 92130 
 contact@wangjiahan.com.
 
 ## Assistant IA DeepSeek
-Le serveur envoie vos messages, un historique récent limité, les règles publiques de Joinly, une sélection d’activités publiques et la FAQ à l’API DeepSeek. Les intérêts et la zone choisie sont envoyés uniquement avec les deux autorisations décrites plus haut. Aucun nom, e-mail, identifiant de compte ou réservation privée n’est ajouté automatiquement au contexte.
+Le serveur envoie vos messages, un historique récent limité, les règles publiques de Joinly, une sélection d’activités publiques et la FAQ à l’API DeepSeek. Les intérêts et la zone choisie sont envoyés uniquement avec les deux autorisations décrites plus haut. Aucun nom, e-mail ou identifiant de compte n’est ajouté automatiquement au contexte. Si vous cochez l’autorisation des inscriptions dans le chat, l’assistant peut transmettre à DeepSeek les activités, dates et états de vos propres inscriptions. Cette autorisation permet également de préparer une réservation ; sa validation exige une confirmation distincte sur Joinly.
 
-Joinly ne conserve pas le texte des conversations dans sa base ni dans ses journaux applicatifs. L’historique reste en mémoire dans la page et disparaît quand vous la quittez ou cliquez sur Effacer. Effacer la page ne supprime pas les données déjà reçues par DeepSeek : leur traitement et leur conservation relèvent également des conditions du fournisseur (https://www.deepseek.com/privacy). Les réponses sont générées automatiquement et peuvent être inexactes. L’assistant ne réalise aucune réservation, annulation ou opération sur votre compte.""",
+Joinly ne conserve pas le texte des conversations dans sa base ni dans ses journaux applicatifs. L’historique reste en mémoire dans la page et disparaît quand vous la quittez ou cliquez sur Effacer. Effacer la page ne supprime pas les données déjà reçues par DeepSeek : leur traitement et leur conservation relèvent également des conditions du fournisseur (https://www.deepseek.com/privacy). Les réponses sont générées automatiquement et peuvent être inexactes. L’assistant peut préparer une demande de réservation. Une place n’est attribuée qu’après votre confirmation sur le site. Il ne réalise pas d’annulation ni de paiement réel.
+
+## Connexions MCP
+Vous pouvez créer dans Mon espace un jeton d’accès personnel pour un client MCP. Les permissions publiques, la lecture de vos inscriptions et la préparation de réservations sont distinctes. Le client et son fournisseur d’IA peuvent recevoir les données que vous autorisez : consultez leurs conditions avant de les connecter. Le jeton est affiché une fois, conservé sous forme de condensat et révocable depuis Mon espace. Il expire après 30 jours et cesse de fonctionner si vos identifiants changent.
+
+Les propositions de réservation sont liées à votre compte, valables 15 minutes et contiennent un récapitulatif de l’activité. La commande de nettoyage supprime les propositions et accès expirés ou révoqués depuis plus de 30 jours. Les inscriptions confirmées restent soumises à la durée de conservation des réservations. Aucun historique des conversations MCP n’est enregistré par Joinly.""",
 }
 
 

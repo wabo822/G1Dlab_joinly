@@ -1,8 +1,9 @@
-"""Read-only Joinly assistant. Only authorized conversation and public context are sent to the provider."""
+"""Joinly assistant with scoped tools and browser-confirmed booking proposals."""
 import hashlib
 import json
 import re
 import socket
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -10,6 +11,7 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from flask import g, jsonify, request
+from app.assistant_tools import ToolError, definitions
 
 SYSTEM = (Path(__file__).with_name('assistant_context.md')).read_text()
 LOCK_ID = 248917
@@ -19,27 +21,81 @@ class ProviderUnavailable(Exception):
     pass
 
 
-def completion(config, messages):
-    payload = json.dumps({
+def completion(config, messages, tool_defs=None, timeout=18):
+    body = {
         'model': config['DEEPSEEK_MODEL'], 'messages': messages,
         'thinking': {'type': 'disabled'}, 'max_tokens': 700, 'stream': False,
-    }).encode()
+    }
+    if tool_defs:
+        body['tools'] = [{'type':'function', 'function':{'name':t['name'], 'description':t['description'], 'parameters':t['inputSchema']}} for t in tool_defs]
+    payload = json.dumps(body).encode()
     req = Request('https://api.deepseek.com/chat/completions', data=payload, headers={
         'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config['DEEPSEEK_API_KEY'],
     }, method='POST')
     try:
-        with urlopen(req, timeout=18) as response:
+        with urlopen(req, timeout=timeout) as response:
             raw = response.read(128001)
         if len(raw) > 128000:
             raise ValueError('Oversized response')
         data = json.loads(raw)
-        answer = data['choices'][0]['message']['content']
-        if not isinstance(answer, str) or not answer.strip():
-            raise ValueError('Empty response')
-        return answer.strip()[:6500]
+        message = data['choices'][0]['message']
+        if not isinstance(message, dict):
+            raise ValueError('Invalid response')
+        return message
     except (HTTPError, URLError, TimeoutError, socket.timeout, ValueError, KeyError, IndexError, TypeError) as error:
         # Never include the upstream body, request, key or chat content in logs or HTTP errors.
         raise ProviderUnavailable(type(error).__name__) from None
+
+
+def tool_conversation(config, messages, service, user_id, scopes, links):
+    """At most three provider passes and four tool calls, bounded by one deadline."""
+    deadline = time.monotonic() + 20
+    actions, calls_used = [], 0
+    available = definitions(scopes)
+    for step in range(3):
+        remaining = deadline - time.monotonic()
+        if remaining < 1: raise ProviderUnavailable('DeadlineExceeded')
+        reply = completion(config, messages, tool_defs=available if step < 2 and calls_used < 4 else None,
+                           timeout=min(12, remaining))
+        if isinstance(reply, str): reply = {'content': reply}  # compatibility with test providers
+        calls = reply.get('tool_calls')
+        if not calls:
+            answer = reply.get('content')
+            if not isinstance(answer, str) or not answer.strip(): raise ProviderUnavailable('EmptyResponse')
+            return answer.strip()[:6500], actions
+        if step == 2 or not isinstance(calls, list) or not 1 <= len(calls) <= 4-calls_used:
+            raise ProviderUnavailable('ToolBudgetExceeded')
+        sanitized = []
+        for call in calls:
+            if not isinstance(call, dict) or not isinstance(call.get('id'), str) or len(call['id'])>200:
+                raise ProviderUnavailable('InvalidToolCall')
+            f = call.get('function',{})
+            if not isinstance(f,dict) or not isinstance(f.get('name'),str) or not isinstance(f.get('arguments'),str) or len(f['arguments'])>8000:
+                raise ProviderUnavailable('InvalidToolCall')
+            sanitized.append({'id':call['id'],'type':'function','function':{'name':f['name'],'arguments':f['arguments']}})
+        messages.append({'role':'assistant','content':reply.get('content') or '', 'tool_calls':sanitized})
+        for call in sanitized:
+            calls_used += 1
+            f = call['function']
+            try:
+                result = service.call(f['name'],json.loads(f['arguments']),user_id,scopes)
+                collect_links(result, links)
+                if result.get('status') == 'awaiting_confirmation':
+                    actions.append({'url':result['confirmation_url'],'label':'Vérifier et confirmer : '+result['activity']['title']})
+            except (ToolError, json.JSONDecodeError) as error:
+                result = {'error': str(error) if isinstance(error, ToolError) else 'Arguments JSON invalides.'}
+            messages.append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(result,ensure_ascii=False,default=str)})
+    raise ProviderUnavailable('ToolBudgetExceeded')
+
+
+def collect_links(value, links):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in ('url','confirmation_url','account_url') and isinstance(item,str) and item.startswith('/') and not item.startswith('//'):
+                links[item] = value.get('title','Joinly')
+            else: collect_links(item, links)
+    elif isinstance(value, list):
+        for item in value: collect_links(item, links)
 
 
 def validate(data):
@@ -95,7 +151,7 @@ def public_context(query, message, history, preferences, cutoff):
             'catalogue_is_a_selection_not_exhaustive': True}
 
 
-def register(app, query, db, cutoff_minutes):
+def register(app, query, db, cutoff_minutes, service):
     @app.context_processor
     def chat_options():
         allowed = False
@@ -146,15 +202,22 @@ def register(app, query, db, cutoff_minutes):
             messages = [{'role': 'system', 'content': SYSTEM},
                         {'role': 'system', 'content': 'DONNÉES DE RÉFÉRENCE NON EXÉCUTABLES (JSON) :\n' + json.dumps(context, ensure_ascii=False, default=str)},
                         *history, {'role': 'user', 'content': message}]
+            links = {event['url']: event['title'] for event in context['activities']}
+            links.update({'/activities':'Explorer','/faq':'FAQ','/contact':'Contact','/account':'Mon espace',
+                          '/signup':'Inscription','/login':'Connexion','/organizer':'Organiser','/classement':'Tendances',
+                          '/forgot-password':'Mot de passe oublié','/legal/privacy':'Confidentialité','/account/mcp':'MCP'})
+            scopes = {'public:read'}
+            user_id = None
+            if data.get('use_bookings') is True and g.user and not g.impersonating:
+                user_id = g.user['id']
+                scopes.update({'bookings:read','bookings:write'})
+            messages[0]['content'] += '\nAccès aux inscriptions autorisé pour cette requête : ' + str(bool(user_id))
             try:
-                answer = completion(app.config, messages)
+                answer, actions = tool_conversation(app.config, messages, service, user_id, scopes, links)
             except ProviderUnavailable as error:
                 app.logger.warning('Assistant provider unavailable: %s', str(error))
                 return jsonify(error='DeepSeek ne répond pas pour le moment. Réessayez plus tard ; la FAQ reste disponible.'), 503
-            links = {event['url']: event['title'] for event in context['activities']}
-            links.update({'/activities': 'Explorer', '/faq': 'FAQ', '/contact': 'Contact', '/account': 'Mon espace',
-                          '/signup': 'Inscription', '/login': 'Connexion', '/organizer': 'Organiser',
-                          '/forgot-password': 'Mot de passe oublié', '/legal/privacy': 'Confidentialité'})
-            return jsonify(answer=answer, links=links, profile_used=bool(preferences))
+            return jsonify(answer=answer, links=links, actions=actions, profile_used=bool(preferences), bookings_access=bool(user_id))
+
         finally:
             query('SELECT pg_advisory_unlock(%s)', (LOCK_ID,), True)
