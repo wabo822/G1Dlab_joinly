@@ -148,7 +148,7 @@ Selon votre usage, le site traite les données suivantes.
 
 Compte : adresse e-mail, nom affiché, condensat du mot de passe, rôle (participant, organisateur, administrateur), état du compte (actif ou suspendu) et dates de création et de mise à jour.
 
-Préférences, si vous les enregistrez : centres d’intérêt, zone géographique choisie et choix facultatif d’autoriser un futur assistant à les utiliser. Cet assistant n’est pas en service dans cette version.
+Préférences, si vous les enregistrez : centres d’intérêt, zone géographique choisie et choix facultatif d’autoriser l’assistant à les utiliser. Leur envoi exige également une case dédiée dans le chat.
 
 Réservations : activité concernée, état (confirmée ou annulée) et dates d’inscription et d’annulation.
 
@@ -169,7 +169,7 @@ Sécurité du site, protection des formulaires, limitation des tentatives abusiv
 
 Mémorisation du choix « J’ai compris » du bandeau d’information sur les cookies, dans le stockage local du navigateur : intérêt légitime à ne pas réafficher cette information à chaque page (article 6, paragraphe 1, point f). Ce stockage n’est pas un cookie et ne sert pas au suivi.
 
-Case facultative relative à un futur assistant : consentement (article 6, paragraphe 1, point a), recueilli par une case non cochée par défaut. L’assistant n’est pas activé. Vous pouvez retirer ce choix depuis Mon espace, sans effet sur le reste du compte.
+Assistant IA facultatif : vos messages sont transmis à DeepSeek seulement après activation de la case du chat, non cochée par défaut. Vos préférences exigent en plus votre autorisation dans Mon espace et dans le chat. Vous pouvez retirer ces choix à tout moment, sans effet sur le reste du compte.
 
 Les activités de démonstration liées aux comptes @demo.joinly.fr sont des exemples pédagogiques. Leurs noms et adresses e-mail sont fictifs.
 
@@ -178,7 +178,7 @@ Session de connexion : 12 heures, puis le jeton n’est plus accepté. Les jeton
 
 Lien de réinitialisation du mot de passe : 30 minutes, et une seule utilisation. Le message n’est envoyé que si l’envoi d’e-mails est configuré.
 
-Compteurs de limitation des tentatives : 15 minutes.
+Compteurs de limitation : fenêtres de 15 minutes à 24 heures pour le chat ; les compteurs expirés sont supprimables par le nettoyage du projet.
 
 Compte, préférences, activités et réservations : pendant l’utilisation du compte, puis jusqu’à douze mois après la dernière connexion, ou plus tôt si vous demandez la suppression. La durée du projet pédagogique peut conduire à un effacement plus rapide, une fois l’évaluation terminée.
 
@@ -198,7 +198,7 @@ Brevo (envoi d’e-mails transactionnels) peut recevoir l’adresse e-mail du de
 Les données ne sont pas vendues, ni cédées à des régies publicitaires. Aucun outil de mesure d’audience tiers n’est intégré.
 
 ## Transferts hors de l’Union européenne
-L’hébergement retenu (Contabo, Allemagne) et l’envoi transactionnel (Brevo) sont situés dans l’Union européenne. Cette version du site n’organise pas de transfert de vos données vers un pays tiers. Aucun traceur publicitaire ou réseau social n’est déposé.
+Le chat utilise l’API DeepSeek, un fournisseur extérieur à l’Union européenne. Son utilisation implique la transmission des messages et du contexte indiqué ci-dessous à ce fournisseur. Évitez toute donnée personnelle ou sensible dans vos messages. Les autres fonctions de Joinly restent utilisables sans le chat. Aucun traceur publicitaire ou réseau social n’est déposé.
 
 ## Cookies
 Le site utilise uniquement des cookies strictement nécessaires, exemptés de consentement préalable. Ils ne servent ni à la publicité, ni à la mesure d’audience, ni au profilage.
@@ -210,7 +210,7 @@ Aucun autre cookie n’est déposé par Joinly. Il n’y a pas de cookie analyti
 Le bandeau d’information mémorise son fermeture dans le stockage local du navigateur (clé « joinly-cookie-notice »). Ce n’est pas un cookie. Vous pouvez l’effacer en nettoyant les données locales du site ; le bandeau s’affichera de nouveau.
 
 ## Vos droits
-Vous disposez des droits d’accès, de rectification, d’effacement, de limitation, d’opposition et de portabilité, dans les conditions prévues par le RGPD. Vous pouvez retirer à tout moment le consentement donné pour le futur assistant. Vous pouvez aussi définir des directives relatives à la conservation de vos données après votre décès, conformément à la loi Informatique et Libertés.
+Vous disposez des droits d’accès, de rectification, d’effacement, de limitation, d’opposition et de portabilité, dans les conditions prévues par le RGPD. Vous pouvez retirer à tout moment le choix donné pour l’assistant. Vous pouvez aussi définir des directives relatives à la conservation de vos données après votre décès, conformément à la loi Informatique et Libertés.
 
 Pour exercer ces droits : contact@wangjiahan.com ou le formulaire de contact. Une vérification d’identité peut être demandée lorsque la demande n’est pas faite depuis le compte concerné. Une réponse est apportée dans un délai d’un mois, prolongeable dans les cas prévus par le texte.
 
@@ -221,7 +221,12 @@ Si vous estimez que vos droits ne sont pas respectés, vous pouvez introduire un
 
 ## Contact
 Jiahan Wang — Joinly, projet étudiant G1D Lab, ISEP, 10 rue de Vanves, 92130 Issy-les-Moulineaux.
-contact@wangjiahan.com.""",
+contact@wangjiahan.com.
+
+## Assistant IA DeepSeek
+Le serveur envoie vos messages, un historique récent limité, les règles publiques de Joinly, une sélection d’activités publiques et la FAQ à l’API DeepSeek. Les intérêts et la zone choisie sont envoyés uniquement avec les deux autorisations décrites plus haut. Aucun nom, e-mail, identifiant de compte ou réservation privée n’est ajouté automatiquement au contexte.
+
+Joinly ne conserve pas le texte des conversations dans sa base ni dans ses journaux applicatifs. L’historique reste en mémoire dans la page et disparaît quand vous la quittez ou cliquez sur Effacer. Effacer la page ne supprime pas les données déjà reçues par DeepSeek : leur traitement et leur conservation relèvent également des conditions du fournisseur (https://www.deepseek.com/privacy). Les réponses sont générées automatiquement et peuvent être inexactes. L’assistant ne réalise aucune réservation, annulation ou opération sur votre compte.""",
 }
 
 

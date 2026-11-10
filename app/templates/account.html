@@ -94,8 +94,8 @@
 <label>Zone préférée<input name="chosen_area" maxlength="150" value="{{ preferences.chosen_area or '' if preferences else '' }}">
 </label>
 <label class="check">
-<input type="checkbox" name="assistant_consent" {% if preferences and preferences.assistant_consent %}checked{% endif %}>Autoriser le futur assistant à utiliser mes préférences</label>
-<small>Préférences privées. L’assistant IA n’est pas activé dans cette version.</small>
+<input type="checkbox" name="assistant_consent" {% if preferences and preferences.assistant_consent %}checked{% endif %}>Autoriser l’assistant à utiliser mes préférences</label>
+<small>Préférences privées. Leur partage avec DeepSeek exige aussi votre accord dans le chat.</small>
 <button data-interest-submit>Enregistrer mon profil</button>
 </form>
 <hr>

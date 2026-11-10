@@ -64,13 +64,13 @@ sont dans [docs/demo-accounts.md](docs/demo-accounts.md).
 | Réservations | Inscription à une activité, annulation et consultation de ses réservations. |
 | Organisation | Création et modification d'événements, gestion des capacités et des participants. |
 | Interface | Page d'accueil ; adaptation responsive aux écrans d'ordinateur et de mobile selon l'avancement. |
-| Assistant IA | Chatbot Joinly : recommandations selon le profil, réponses contextualisées sur le projet et questions générales. Fonction prévue, non implémentée. |
+| Assistant IA | Chatbot Joinly : recommandations selon le profil, réponses contextualisées sur le projet et questions générales. Disponible via DeepSeek, avec consentement et quotas. |
 
 ### Assistant IA Joinly et recommandations personnalisées
 
 L'assistant entre dans le périmètre proposé avec une **priorité moyenne
 proposée**, à valider avec le client après le socle obligatoire et la réservation.
-Il ne correspond pas à la messagerie entre membres et n'est pas encore implémenté.
+Il est disponible dans le widget en bas à droite. Configuration et limites : [docs/chatbot.md](docs/chatbot.md).
 
 - **Recommandations** : avec l'accord du membre, utiliser ses centres d'intérêt,
   sa zone choisie et ses préférences déclarées pour suggérer jusqu'à trois
@@ -83,7 +83,7 @@ Il ne correspond pas à la messagerie entre membres et n'est pas encore impléme
   générales des informations fournies sur Joinly. Aucun accès au Web en temps
   réel n'est prévu pour le prototype.
 
-**Prototype : API et prompt engineering.** Le serveur composera un prompt avec
+**Prototype : API et prompt engineering.** Le serveur compose un prompt avec
 les instructions, les extraits fixes validés, les préférences autorisées et une
 courte liste d'activités sélectionnées par des filtres simples. Le modèle
 existant génère la réponse, sans entraînement. Il n'y a ni moteur de recherche

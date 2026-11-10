@@ -43,7 +43,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
+INTEREST_FREE = {'assistant_chat', 'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
 
 
 def _env_cutoff():
@@ -70,6 +70,9 @@ def create_app(config=None):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
+        DEEPSEEK_API_KEY=os.environ.get('DEEPSEEK_API_KEY', '').strip(),
+        DEEPSEEK_MODEL=os.environ.get('DEEPSEEK_MODEL', 'deepseek-flash'),
+        CHAT_DAILY_LIMIT=100,
         GOOGLE_CLIENT_ID=os.environ.get('GOOGLE_CLIENT_ID', '').strip(),
         GOOGLE_CLIENT_SECRET=os.environ.get('GOOGLE_CLIENT_SECRET', '').strip(),
     )
@@ -1799,5 +1802,8 @@ def create_app(config=None):
 
     from app.admin_office import register_office
     register_office(app, query, db, text, email_value, money_cents)
+
+    from app.chatbot import register as register_chatbot
+    register_chatbot(app, query, db, cutoff_minutes)
 
     return app
