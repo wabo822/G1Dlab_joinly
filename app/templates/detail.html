@@ -11,11 +11,12 @@
 <p class="eyebrow">{{ event.category_icon }} {{ event.category or 'ACTIVITÉ' }} · {{ event.price_cents|pricefr }}</p>
 <h1>{{ event.title }}</h1>
 <p class="lead">Proposé par <a href="{{ url_for('organizer_public', user_id=event.organizer_id) }}">{{ event.organizer }}</a>{% if event.rating_count %} · {{ event.rating_avg }} ★ ({{ event.rating_count }} avis){% endif %}</p>
-<div class="detail-art">
+<div class="detail-art{% if event.cover_href %} has-cover{% endif %}">
 {% if event.cover_href %}
 <img class="cover" src="{{ event.cover_href }}" alt="">
-{% endif %}
+{% else %}
 <span>Se retrouver.<br>Partager.<br>Recommencer.</span>
+{% endif %}
 </div>
 {% if event.cover_credit %}
 <p class="muted">Photo : <a href="{{ event.cover_credit.profile_url }}" rel="noopener noreferrer">{{ event.cover_credit.photographer }}</a> sur <a href="{{ event.cover_credit.photo_url }}" rel="noopener noreferrer">Unsplash</a></p>

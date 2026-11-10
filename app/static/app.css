@@ -626,6 +626,16 @@ dd {
   border-radius:100px;
   transform:rotate(30deg);
 }
+.detail-art.has-cover {
+  padding:0;
+  min-height:0;
+  aspect-ratio:16 / 9;
+  background:#d7deef;
+}
+.detail-art.has-cover:after {
+  content:none;
+  display:none;
+}
 .detail-art span {
   position:relative;
   z-index:1;
