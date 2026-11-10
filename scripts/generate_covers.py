@@ -1,8 +1,8 @@
-"""Generate the committed cover library: 13 original illustrations per category.
+"""Fallback illustrations for the cover library.
 
-Unsplash and Pexels search APIs refused anonymous requests in this environment,
-so these files are original drawings (gradients and shapes), not third-party photos.
-Run from the repository root: .venv/bin/python scripts/generate_covers.py
+The committed files are photographs from Wikimedia Commons, fetched by
+`scripts/fetch_covers.py` (Unsplash and Pexels search APIs require a key).
+Running this script overwrites those photographs with original drawings.
 """
 import colorsys
 from pathlib import Path

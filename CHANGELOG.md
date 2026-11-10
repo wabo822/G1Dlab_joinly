@@ -1,5 +1,16 @@
 # Journal des modifications
 
+## 2026-11-09 — Photographies de couverture
+
+Les 13 visuels de chaque catégorie sont des photographies distinctes, recadrées en WebP 1200×675 sous 150 Ko. Les API Unsplash et Pexels répondent 401 sans clé : `scripts/fetch_covers.py` interroge Wikimedia Commons, au plus 40 requêtes par heure, et reprend depuis `instance/cover-fetch.json` au lieu de s’arrêter quand le budget horaire est atteint. Les crédits (URL, auteur, licence) sont dans `docs/image-credits.md`. L’attribution automatique par hash ne change pas.
+
+### Fichiers
+
+- `scripts/fetch_covers.py`, `scripts/generate_covers.py`
+- `app/static/covers/**`, `docs/image-credits.md`, `README.md`, `CHANGELOG.md`
+
+Empilée sur l’administration (#16).
+
 ## 2026-11-09 — Administration complète
 
 L’administration a une barre latérale. Le tableau de bord affiche les comptes, les activités ouvertes, les réservations, le revenu simulé, la note et les messages en attente. Les listes de comptes, d’activités, de réservations et d’avis se filtrent et s’exportent en CSV. L’admin modifie le texte et la note d’un avis, bannit en lot, consulte un compte (bandeau « Consultation en tant que », journalisé), règle l’annonce, le délai de réservation, les poids du classement et les activités à la une. Une demande pour devenir organisateur se traite dans la même zone.
