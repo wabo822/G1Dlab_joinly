@@ -1,5 +1,19 @@
 # Journal des modifications
 
+## 2026-11-09 — Connexion Google
+
+« Continuer avec Google » apparaît sur la connexion et l’inscription seulement si `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` sont définis. Le bouton est sinon absent et `/auth/google` répond 404. Le callback `/auth/google/callback` vérifie `state` et `nonce` (Authlib pour l’échange de jeton). Une adresse déjà vérifiée par Google relie le compte existant ou en crée un déjà confirmé, puis envoie vers les centres d’intérêt s’il en manque. Le `sub` Google est stocké.
+
+Console Google Cloud : origine `https://isep.wangjiahan.com`, redirection `https://isep.wangjiahan.com/auth/google/callback`.
+
+### Fichiers
+
+- `database/migrations/014_google.sql` — `users.google_sub`.
+- `app/__init__.py`, `app/templates/auth.html`, `requirements.txt` (`Authlib==1.6.5`)
+- `.env.example`, `docs/developpement.md`, `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur les remboursements (#12).
+
 ## 2026-11-09 — Annulation et remboursement simulé
 
 Chaque activité a une politique : flexible (intégral jusqu’à 24 h avant, sinon 0), modérée (intégral jusqu’à 72 h, sinon 50 %), stricte (aucun remboursement). Le montant calculé est affiché avant l’annulation et enregistré comme « Remboursement simulé ». Le billet est invalidé, la place se libère, l’organisateur est prévenu et le participant reçoit un e-mail. Si l’organisateur annule l’activité, le remboursement simulé est intégral. L’administrateur peut saisir un remboursement manuel, avec confirmation.

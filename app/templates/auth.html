@@ -6,6 +6,9 @@
 <section class="container section">
 <div class="auth panel{% if mode == 'signup' %} auth-wide{% endif %}">
 <p class="eyebrow">BIENVENUE CHEZ JOINLY</p>
+{% if google_enabled and mode in ('login', 'signup') %}
+<p><a class="button secondary" href="{{ url_for('google_start') }}">Continuer avec Google</a></p>
+{% endif %}
 <h1>{{ {'login':'Heureux de vous revoir.','signup':'Les rencontres commencent ici.','forgot':'Un nouveau départ.','reset':'Votre nouveau mot de passe.','verify':'Confirmez votre adresse.'}[mode] }}</h1>
 {% if mode == 'verify' %}
 <p>Saisissez le code à 6 chiffres envoyé à votre adresse. Il expire dans 15 minutes.</p>

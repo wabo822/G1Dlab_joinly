@@ -999,3 +999,45 @@ def test_simulated_refunds_follow_the_cancellation_policy(app, db):
     assert admin.post(f'/admin/reservations/{manual_id}/remboursement', data={'refund': '4'}).status_code == 400
     assert admin.post(f'/admin/reservations/{manual_id}/remboursement', data={'refund': '4', 'confirm': '1'}).status_code == 302
     assert db.execute('SELECT refund_status, refund_cents FROM reservations WHERE id=%s', (manual_id,)).fetchone()['refund_status'] == 'manual'
+
+
+def test_google_sign_in_is_hidden_until_configured_and_links_accounts(app, db):
+    from urllib.parse import parse_qs, urlparse
+    assert 'Continuer avec Google' not in app.test_client().get('/login').text
+    assert app.test_client().get('/auth/google').status_code == 404
+    app.config['GOOGLE_CLIENT_ID'] = 'test-client'
+    app.config['GOOGLE_CLIENT_SECRET'] = 'test-secret'
+    app.config['PUBLIC_BASE_URL'] = 'https://isep.wangjiahan.com'
+    client = app.test_client()
+    assert 'Continuer avec Google' in client.get('/login').text
+    assert 'Continuer avec Google' in client.get('/signup').text
+    start = client.get('/auth/google')
+    assert start.status_code == 302 and 'accounts.google.com' in start.location
+    query = parse_qs(urlparse(start.location).query)
+    assert query['redirect_uri'] == ['https://isep.wangjiahan.com/auth/google/callback']
+    assert query['client_id'] == ['test-client']
+    assert client.get('/auth/google/callback?state=wrong').status_code == 400
+    with client.session_transaction() as sess:
+        nonce = sess['google_nonce']
+        state = sess['google_state']
+    app.google_userinfo = lambda: {
+        'sub': 'google-sub-1', 'email': 'ada@example.test', 'email_verified': True,
+        'name': 'Ada Google', 'nonce': nonce,
+    }
+    landing = client.get(f'/auth/google/callback?state={state}')
+    assert urlparse(landing.headers['Location']).path == '/interests'
+    stored = db.execute("SELECT email_verified_at, google_sub FROM users WHERE email='ada@example.test'").fetchone()
+    assert stored['google_sub'] == 'google-sub-1' and stored['email_verified_at']
+    user(db, 'known@example.test')
+    again = app.test_client()
+    again.get('/auth/google')
+    with again.session_transaction() as sess:
+        nonce = sess['google_nonce']
+        state = sess['google_state']
+    app.google_userinfo = lambda: {
+        'sub': 'google-sub-2', 'email': 'known@example.test', 'email_verified': True,
+        'name': 'Known', 'nonce': nonce,
+    }
+    landing = again.get(f'/auth/google/callback?state={state}')
+    assert urlparse(landing.headers['Location']).path == '/'
+    assert db.execute("SELECT google_sub FROM users WHERE email='known@example.test'").fetchone()['google_sub'] == 'google-sub-2'

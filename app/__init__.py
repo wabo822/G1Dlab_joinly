@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlencode
 from xml.sax.saxutils import escape as xml_escape
 from zoneinfo import ZoneInfo
 
@@ -17,7 +18,7 @@ import click
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
-from flask import Flask, abort, flash, g, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, abort, current_app, flash, g, redirect, render_template, request, send_from_directory, session, url_for
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from markupsafe import Markup, escape as html_escape
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -66,7 +67,8 @@ def create_app(config=None):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
-        BOOKING_CUTOFF_MINUTES=_env_cutoff(),
+        GOOGLE_CLIENT_ID=os.environ.get('GOOGLE_CLIENT_ID', '').strip(),
+        GOOGLE_CLIENT_SECRET=os.environ.get('GOOGLE_CLIENT_SECRET', '').strip(),
     )
     if config:
         app.config.update(config)
@@ -326,6 +328,7 @@ def create_app(config=None):
             )['n'] if getattr(g, 'user', None) else 0,
             'policy_labels': POLICY_LABELS,
             'refund_preview': refund_cents,
+            'google_enabled': bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET')),
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
@@ -724,6 +727,114 @@ def create_app(config=None):
             notify.start_verification(app, query, account['id'], email)
         flash('Si un compte non confirmé correspond à cette adresse, un nouveau code a été envoyé.', 'success')
         return redirect(url_for('verify_email', email=email))
+
+    def google_ready():
+        return bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET'))
+
+    def default_google_userinfo():
+        from authlib.integrations.requests_client import OAuth2Session
+        redirect_uri = public_base() + url_for('google_callback')
+        nonce = session.get('google_nonce')
+        client = OAuth2Session(
+            app.config['GOOGLE_CLIENT_ID'], app.config['GOOGLE_CLIENT_SECRET'],
+            scope='openid email profile', redirect_uri=redirect_uri,
+            state=session.get('google_state'), nonce=nonce,
+        )
+        token = client.fetch_token('https://oauth2.googleapis.com/token', code=request.args.get('code', ''))
+        claims = client.parse_id_token(token, nonce=nonce) if token.get('id_token') else {}
+        info = token.get('userinfo') or client.get('https://openidconnect.googleapis.com/v1/userinfo').json()
+        info['sub'] = info.get('sub') or claims.get('sub')
+        info['nonce'] = claims.get('nonce')
+        if 'email_verified' not in info and 'email_verified' in claims:
+            info['email_verified'] = claims.get('email_verified')
+        return info
+
+    app.google_userinfo = default_google_userinfo
+
+    def _same(left, right):
+        import hmac
+        raw_left, raw_right = str(left or '').encode(), str(right or '').encode()
+        if not raw_left or len(raw_left) != len(raw_right):
+            return False
+        return hmac.compare_digest(raw_left, raw_right)
+
+    @app.get('/auth/google')
+    def google_start():
+        if not google_ready():
+            abort(404)
+        state = secrets.token_urlsafe(24)
+        nonce = secrets.token_urlsafe(24)
+        session['google_state'] = state
+        session['google_nonce'] = nonce
+        redirect_uri = public_base() + url_for('google_callback')
+        params = urlencode({
+            'client_id': app.config['GOOGLE_CLIENT_ID'],
+            'redirect_uri': redirect_uri,
+            'response_type': 'code',
+            'scope': 'openid email profile',
+            'state': state,
+            'nonce': nonce,
+        })
+        return redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params)
+
+    @app.get('/auth/google/callback')
+    def google_callback():
+        if not google_ready():
+            abort(404)
+        if not _same(request.args.get('state', ''), session.get('google_state')):
+            abort(400)
+        try:
+            info = current_app.google_userinfo()
+        except Exception:
+            app.logger.exception('Google sign-in failed')
+            flash('Connexion Google impossible pour le moment.', 'error')
+            return redirect(url_for('login'))
+        session.pop('google_state', None)
+        nonce = session.pop('google_nonce', None)
+        if not isinstance(info, dict) or not _same(info.get('nonce'), nonce):
+            abort(400)
+        if not info.get('email_verified') or not info.get('email') or not info.get('sub'):
+            flash('Le compte Google ne fournit pas une adresse e-mail vérifiée.', 'error')
+            return redirect(url_for('login'))
+        email = str(info['email']).strip().lower()
+        sub = str(info['sub'])[:255]
+        if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+            abort(400)
+        by_sub = query('SELECT * FROM users WHERE google_sub=%s', (sub,), True)
+        by_email = query('SELECT * FROM users WHERE email=%s', (email,), True)
+        if by_sub and by_email and by_sub['id'] != by_email['id']:
+            flash('Ce compte Google est déjà lié à une autre adresse.', 'error')
+            return redirect(url_for('login'))
+        account = by_sub or by_email
+        if account and account['status'] != 'active':
+            flash('Compte indisponible.', 'error')
+            return redirect(url_for('login'))
+        if account and account.get('google_sub') and account['google_sub'] != sub:
+            flash('Cette adresse est déjà liée à un autre compte Google.', 'error')
+            return redirect(url_for('login'))
+        if account:
+            db().execute(
+                'UPDATE users SET google_sub=%s, email_verified_at=COALESCE(email_verified_at, now()) WHERE id=%s',
+                (sub, account['id']),
+            )
+            user_id = account['id']
+        else:
+            name = (str(info.get('name') or email.split('@')[0])).strip()[:100] or email.split('@')[0]
+            created = query(
+                '''INSERT INTO users(email, display_name, password_hash, email_verified_at, google_sub)
+                   VALUES (%s, %s, %s, now(), %s) RETURNING id''',
+                (email, name, generate_password_hash(secrets.token_urlsafe(32)), sub), True,
+            )
+            db().execute("INSERT INTO user_roles(user_id, role_id) SELECT %s, id FROM roles WHERE name='member'", (created['id'],))
+            user_id = created['id']
+        token = secrets.token_urlsafe(32)
+        session.clear()
+        session.permanent = True
+        session['auth_token'] = token
+        db().execute("INSERT INTO web_sessions(token_hash,user_id,expires_at) VALUES (%s,%s,now()+interval '12 hours')", (digest(token), user_id))
+        if interest_total(user_id) < MIN_INTERESTS:
+            return redirect(url_for('interests'))
+        return redirect(url_for('home'))
 
     @app.post('/logout')
     def logout():
