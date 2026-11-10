@@ -1234,3 +1234,32 @@ def test_booking_html_email_embeds_inline_qr(app, db, monkeypatch):
     assert 'Paiement simulé' in html
     assert any('ticket-qr' in cid for cid in cids)
     assert png and png.startswith(b'\x89PNG')
+
+def test_organizer_landing_is_dashboard_and_list_has_its_own_page(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    eid = event(db, owner, 10)
+    db.execute("UPDATE events SET title='Atelier suivi', price_cents=1000, view_count=12 WHERE id=%s", (eid,))
+    for index in range(4):
+        member = user(db, f'board{index}@example.test')
+        db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (member, eid))
+    client = login(app, 'owner@example.test')
+    home = client.get('/organizer')
+    assert home.status_code == 200
+    assert 'Tableau de bord' in home.text
+    assert '12' in home.text and '40 %' in home.text and '40 €' in home.text
+    assert 'periode=7' in home.text and 'periode=90' in home.text
+    assert client.get('/organizer?periode=7').status_code == 200
+    listing = client.get('/organizer/activites')
+    assert listing.status_code == 200 and 'Atelier suivi' in listing.text
+    assert 'Créer une activité' in listing.text
+
+
+def test_admin_dashboard_has_period_kpis_and_keeps_moderation_forms(app, db):
+    user(db, 'boss@example.test', ('member', 'admin'), interests=False)
+    office = login(app, 'boss@example.test')
+    page = office.get('/admin')
+    assert page.status_code == 200
+    assert 'Nouveaux comptes' in page.text
+    assert '30 jours' in page.text
+    assert 'id="faq"' in page.text and 'id="legal"' in page.text and 'id="contact"' in page.text
+    assert office.get('/admin?periode=90').status_code == 200

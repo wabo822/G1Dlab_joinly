@@ -4,15 +4,67 @@
 <section class="container section">
 <p class="eyebrow">ADMINISTRATION</p>
 <h1>Prendre soin de la communauté.</h1>
-<div class="admin-grid">
-<article class="panel"><h2>Comptes</h2><p>{{ kpis.users }}</p></article>
-<article class="panel"><h2>Activités ouvertes</h2><p>{{ kpis.active_events }}</p></article>
-<article class="panel"><h2>Réservations</h2><p>{{ kpis.reservations }}</p></article>
-<article class="panel"><h2>Revenu simulé</h2><p>{{ kpis.revenue|pricefr }}</p></article>
-<article class="panel"><h2>Note moyenne</h2><p>{{ kpis.rating or '—' }}</p></article>
-<article class="panel"><h2>À modérer</h2><p>{{ kpis.pending }} messages</p></article>
+<div class="actions">
+<nav class="period-filter" aria-label="Période">
+{% for value, label in [('7','7 jours'),('30','30 jours'),('90','90 jours')] %}
+<a class="{{ 'button small' if days == value|int else 'button secondary small' }}" href="{{ url_for('admin', periode=value) }}">{{ label }}</a>
+{% endfor %}
+</nav>
 </div>
-{{ signup_chart }}
+<div class="kpi-grid">
+<article class="panel kpi"><p class="muted">Comptes</p><p class="kpi-value">{{ kpis.users }}</p><p class="muted">+{{ kpis.new_signups }} sur la période</p></article>
+<article class="panel kpi"><p class="muted">Adresses confirmées</p><p class="kpi-value">{{ kpis.verified_pct }} %</p></article>
+<article class="panel kpi"><p class="muted">Activités ouvertes</p><p class="kpi-value">{{ kpis.active_events }}</p><p class="muted">{{ kpis.events }} au total</p></article>
+<article class="panel kpi"><p class="muted">Réservations</p><p class="kpi-value">{{ kpis.reservations }}</p></article>
+<article class="panel kpi"><p class="muted">Revenu simulé</p><p class="kpi-value">{{ kpis.revenue|pricefr }}</p></article>
+<article class="panel kpi"><p class="muted">Note moyenne</p><p class="kpi-value">{{ kpis.rating or '—' }}</p></article>
+<article class="panel kpi"><p class="muted">Notifications envoyées</p><p class="kpi-value">{{ kpis.notifications }}</p><p class="muted">sur la période</p></article>
+<article class="panel kpi"><p class="muted">À modérer</p><p class="kpi-value">{{ kpis.pending }}</p><p class="muted">messages</p></article>
+</div>
+<div class="dash-grid">
+<article class="panel"><h2>Nouveaux comptes</h2>{{ signup_chart }}</article>
+<article class="panel"><h2>Réservations confirmées</h2>{{ reservation_chart }}</article>
+<article class="panel"><h2>Activités par catégorie</h2>{{ category_chart }}</article>
+<article class="panel"><h2>Activités par état</h2>{{ status_chart }}</article>
+</div>
+<div class="dash-grid">
+<article class="panel">
+<h2>Organisateurs les plus suivis</h2>
+<div class="table-wrap"><table class="data-table">
+<thead><tr><th>Organisateur</th><th>Activités</th><th>Inscriptions</th></tr></thead>
+<tbody>
+{% for row in top_organizers %}
+<tr><td><a href="{{ url_for('organizer_public', user_id=row.id) }}">{{ row.display_name }}</a></td><td>{{ row.events }}</td><td>{{ row.bookings }}</td></tr>
+{% else %}
+<tr><td colspan="3" class="muted">Pas encore d’organisateur actif.</td></tr>
+{% endfor %}
+</tbody></table></div>
+</article>
+<article class="panel">
+<h2>Activités les plus suivies</h2>
+<div class="table-wrap"><table class="data-table">
+<thead><tr><th>Activité</th><th>Inscrits</th><th>Vues</th></tr></thead>
+<tbody>
+{% for row in top_activities %}
+<tr><td><a href="{{ url_for('detail', event_id=row.id) }}">{{ row.title }}</a></td><td>{{ row.booked }}</td><td>{{ row.view_count }}</td></tr>
+{% else %}
+<tr><td colspan="3" class="muted">Aucune activité.</td></tr>
+{% endfor %}
+</tbody></table></div>
+</article>
+<article class="panel">
+<h2>Journal récent</h2>
+{% for row in feed %}
+<p>{% if row.kind == 'reservation' %}{{ row.display_name }} s’est inscrit à « {{ row.title }} »
+{% elif row.kind == 'signup' %}{{ row.display_name }} a créé un compte
+{% elif row.kind == 'review' %}{{ row.display_name }} a laissé un avis sur « {{ row.title }} »
+{% endif %}
+<span class="muted"> · {{ row.at|datefr }}</span></p>
+{% else %}
+<p class="muted">Rien à signaler pour le moment.</p>
+{% endfor %}
+</article>
+</div>
 <nav class="actions">
 <a href="#users">Comptes</a>
 <a href="#faq">FAQ</a>

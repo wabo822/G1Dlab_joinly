@@ -96,7 +96,7 @@
 </details>
 {% if 'organizer' in g.roles %}
 <hr>
-<a href="{{ url_for('organizer') }}">Gérer mes activités →</a>
+<a href="{{ url_for('organizer_activities') }}">Gérer mes activités →</a>
 {% else %}
 <hr>
 <form method="post" action="{{ url_for('request_organizer') }}" class="stack">

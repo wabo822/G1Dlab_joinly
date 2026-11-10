@@ -28,6 +28,7 @@ from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
 from app import covers, notify
 from app.charts import line_chart
+from app import dashboards
 from app.posters import render_poster
 from app.tickets import issue_ticket, payload_for, qr_png
 
@@ -1033,51 +1034,26 @@ def create_app(config=None):
         flash(f'Réservation annulée. Remboursement simulé : {euros}.', 'success')
         return redirect(url_for('account'))
 
+    def _organizer_board():
+        days = dashboards.period_days(request.args)
+        return render_template('dashboard.html', **dashboards.organizer_payload(query, g.user['id'], days))
+
     @app.get('/organizer')
     @require('organizer')
     def organizer():
-        return render_template('organizer.html', events=query(event_select + ' WHERE e.organizer_id=%s ORDER BY e.starts_at DESC', (g.user['id'],)))
+        return _organizer_board()
 
     @app.get('/organizer/tableau')
     @require('organizer')
     def organizer_dashboard():
-        owner = g.user['id']
-        stats = query(
-            '''SELECT COALESCE(SUM(e.view_count),0) AS views,
-                      COALESCE(SUM(e.capacity),0) AS capacity,
-                      COALESCE(SUM((SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')),0) AS filled,
-                      COALESCE(SUM(e.price_cents * (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')),0) AS gross,
-                      COALESCE(SUM((SELECT COALESCE(SUM(r.refund_cents),0) FROM reservations r WHERE r.event_id=e.id)),0) AS refunds
-               FROM events e WHERE e.organizer_id=%s AND e.status<>'cancelled' ''',
-            (owner,), True,
-        )
-        rating = query(
-            '''SELECT round(avg(rv.rating)::numeric, 1) AS avg, count(*) AS n
-               FROM reviews rv JOIN events e ON e.id=rv.event_id
-               WHERE e.organizer_id=%s AND NOT rv.hidden''',
-            (owner,), True,
-        )
-        top = query(
-            '''SELECT e.id, e.title, e.view_count,
-                      (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS booked
-               FROM events e WHERE e.organizer_id=%s
-               ORDER BY booked DESC, e.view_count DESC LIMIT 5''',
-            (owner,),
-        )
-        days = query(
-            '''SELECT to_char((r.reserved_at AT TIME ZONE 'Europe/Paris')::date, 'DD/MM') AS label, count(*) AS n
-               FROM reservations r JOIN events e ON e.id=r.event_id
-               WHERE e.organizer_id=%s AND r.status='confirmed' AND r.reserved_at > now() - interval '30 days'
-               GROUP BY 1 ORDER BY min(r.reserved_at)''',
-            (owner,),
-        )
-        capacity = int(stats['capacity'] or 0)
-        filled = int(stats['filled'] or 0)
+        return _organizer_board()
+
+    @app.get('/organizer/activites')
+    @require('organizer')
+    def organizer_activities():
         return render_template(
-            'dashboard.html', stats=stats, rating=rating, top=top,
-            fill_rate=round(100 * filled / capacity) if capacity else 0,
-            net=int(stats['gross'] or 0) - int(stats['refunds'] or 0),
-            chart=line_chart([row['n'] for row in days] or [0], [row['label'] for row in days] or ['—']),
+            'organizer_activities.html',
+            events=query(event_select + ' WHERE e.organizer_id=%s ORDER BY e.starts_at DESC', (g.user['id'],)),
         )
 
     def event_data():
@@ -1185,7 +1161,7 @@ def create_app(config=None):
                             f'/activities/{event_id}', email=person['email'],
                         )
             flash('Activité enregistrée.', 'success')
-            return redirect(url_for('organizer'))
+            return redirect(url_for('organizer_activities'))
         return render_template('event_form.html', event=event, categories=query('SELECT * FROM categories ORDER BY name'), library=covers.library_tree())
 
     def store_cover(event_id, previous):
@@ -1236,7 +1212,7 @@ def create_app(config=None):
                 f'/activities/{event_id}', dedupe_key=f'cancelled:{event_id}:{person["id"]}', email=person['email'],
             )
         flash('Activité et inscriptions annulées.', 'success')
-        return redirect(url_for('organizer'))
+        return redirect(url_for('organizer_activities'))
 
     @app.get('/organizer/<int:event_id>/participants')
     @require('organizer')
@@ -1510,6 +1486,8 @@ def create_app(config=None):
     @app.get('/admin')
     @require('admin')
     def admin():
+        days = dashboards.period_days(request.args)
+        payload = dashboards.admin_payload(query, days)
         return render_template('admin.html', users=query('''SELECT u.id,u.email,u.display_name,u.status,
             ARRAY(SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=u.id) AS roles
             FROM users u ORDER BY u.id'''), faqs=query('SELECT * FROM faqs ORDER BY sort_order,id'),
@@ -1523,22 +1501,7 @@ def create_app(config=None):
             refundable=query('''SELECT r.id, u.display_name, e.title, e.price_cents, r.refund_cents, r.refund_status
                 FROM reservations r JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id
                 WHERE e.price_cents > 0 ORDER BY r.reserved_at DESC LIMIT 20'''),
-            kpis=query('''SELECT
-                (SELECT count(*) FROM users) AS users,
-                (SELECT count(*) FROM events WHERE status='published' AND ends_at>now()) AS active_events,
-                (SELECT count(*) FROM reservations WHERE status='confirmed') AS reservations,
-                (SELECT COALESCE(SUM(price_cents),0) FROM (
-                    SELECT e.price_cents * (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS price_cents FROM events e
-                ) s) AS revenue,
-                (SELECT round(avg(rating)::numeric,1) FROM reviews WHERE NOT hidden) AS rating,
-                (SELECT count(*) FROM contact_requests WHERE NOT resolved) AS pending''', one=True),
-            signup_chart=line_chart(
-                [row['n'] for row in query('''SELECT
-                    (SELECT count(*) FROM users u WHERE u.created_at::date = d::date) AS n,
-                    to_char(d::date, 'DD/MM') AS label
-                    FROM generate_series(current_date - 13, current_date, interval '1 day') AS d''')],
-                [row['label'] for row in query('''SELECT to_char(d::date, 'DD/MM') AS label
-                    FROM generate_series(current_date - 13, current_date, interval '1 day') AS d''')]))
+            **payload)
 
     @app.post('/admin/events/<int:event_id>/price')
     @require('admin')
