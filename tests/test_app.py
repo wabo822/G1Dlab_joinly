@@ -791,7 +791,16 @@ def test_cover_library_is_stable_and_uploads_are_private(app, db, tmp_path):
     sport = db.execute("SELECT id FROM categories WHERE name='Sport'").fetchone()['id']
     eid = event(db, owner)
     db.execute("UPDATE events SET category_id=%s, title='Atelier couvert' WHERE id=%s", (cuisine, eid))
-    assert 'covers/cuisine/' in app.test_client().get(f'/activities/{eid}').text
+    page = app.test_client().get(f'/activities/{eid}')
+    assert 'covers/cuisine/' in page.text
+    import re
+    from app.covers import credit_for
+    found = re.search(r'covers/cuisine/[0-9]{2}\.webp', page.text)
+    credit = credit_for(found.group(0)) if found else None
+    if credit:
+        assert 'Photo :' in page.text and '>Unsplash</a>' in page.text
+        assert credit['photographer'] in page.text
+        assert 'utm_source=joinly_isep' in page.text and 'utm_medium=referral' in page.text
     organizer = login(app, 'owner@example.test')
     form = event_form(db, eid, category_id=str(sport))
     assert organizer.post(f'/organizer/{eid}/edit', data=form).status_code == 302
@@ -802,6 +811,7 @@ def test_cover_library_is_stable_and_uploads_are_private(app, db, tmp_path):
     assert organizer.post(f'/organizer/{eid}/edit', data=uploaded, content_type='multipart/form-data').status_code == 302
     with_file = app.test_client().get(f'/activities/{eid}').text
     assert '/media/e' in with_file
+    assert 'sur Unsplash' not in with_file
     moved = event_form(db, eid, category_id=str(cuisine))
     assert organizer.post(f'/organizer/{eid}/edit', data=moved).status_code == 302
     assert '/media/e' in app.test_client().get(f'/activities/{eid}').text

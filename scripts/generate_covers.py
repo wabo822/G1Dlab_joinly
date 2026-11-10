@@ -1,7 +1,7 @@
 """Fallback illustrations for the cover library.
 
-The committed files are photographs from Wikimedia Commons, fetched by
-`scripts/fetch_covers.py` (Unsplash and Pexels search APIs require a key).
+The committed files are Unsplash photographs fetched by
+`scripts/fetch_unsplash_covers.py` (the key stays in UNSPLASH_ACCESS_KEY).
 Running this script overwrites those photographs with original drawings.
 """
 import colorsys
