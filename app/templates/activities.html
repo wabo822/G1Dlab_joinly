@@ -8,8 +8,15 @@
 <form class="filters panel" method="get">
 <label>Une envie ?<input name="q" placeholder="Randonnée, jeux, cuisine…" value="{{ request.args.get('q','') }}">
 </label>
-<label>Lieu<input name="location" placeholder="Ville ou lieu" value="{{ request.args.get('location','') }}">
+<label>Lieu<input name="location" placeholder="Parc, rue, salle…" value="{{ request.args.get('location','') }}">
 </label>
+<label>Ville<input name="city" list="cities" placeholder="Paris, Vincennes…" value="{{ request.args.get('city','') }}">
+</label>
+<datalist id="cities">
+{% for city in cities %}
+<option value="{{ city.city }}">
+{% endfor %}
+</datalist>
 <label>Catégorie<select name="category">
 <option value="">Toutes</option>
 {% for c in categories %}
@@ -21,23 +28,42 @@
 </label>
 <label>Au<input type="date" name="to" value="{{ request.args.get('to','') }}">
 </label>
+<label>Prix<select name="price">
+<option value="">Tous</option>
+<option value="free" {% if request.args.get('price') == 'free' %}selected{% endif %}>Gratuit</option>
+<option value="paid" {% if request.args.get('price') == 'paid' %}selected{% endif %}>Payant</option>
+</select>
+</label>
+<label>Prix max. (€)<input name="max" inputmode="decimal" placeholder="20" value="{{ request.args.get('max','') }}">
+</label>
+<label>Trier<select name="sort">
+<option value="date" {% if request.args.get('sort','date') == 'date' %}selected{% endif %}>Date</option>
+<option value="popularity" {% if request.args.get('sort') == 'popularity' %}selected{% endif %}>Popularité</option>
+<option value="price" {% if request.args.get('sort') == 'price' %}selected{% endif %}>Prix</option>
+</select>
+</label>
+<label>Période<select name="when">
+<option value="upcoming" {% if request.args.get('when','upcoming') != 'past' %}selected{% endif %}>À venir et en cours</option>
+<option value="past" {% if request.args.get('when') == 'past' %}selected{% endif %}>Activités passées</option>
+</select>
+</label>
 <div class="actions">
 <button>Rechercher</button>
 <a href="{{ url_for('activities') }}">Réinitialiser</a>
+<a href="{{ url_for('activities', when='past') }}">Voir les activités passées</a>
 </div>
 </form>
 <div class="section-head">
-<h2>Résultats</h2>
-<span>{{ events|length }} activité{{ 's' if events|length != 1 else '' }} sur cette page</span>
+<h2>{{ 'Activités passées' if request.args.get('when') == 'past' else 'Résultats' }}</h2>
+<span>{{ total }} activité{{ 's' if total != 1 else '' }} · page {{ page }} / {{ pages }}</span>
 </div>
 {% include '_cards.html' %}
 <nav class="actions pagination" aria-label="Pagination">
-{% set page=request.args.get('page','1')|int %}
-{% if page > 1 %}
-<a href="{{ url_for('activities',q=request.args.get('q',''),location=request.args.get('location',''),category=request.args.get('category',''),from=request.args.get('from',''),to=request.args.get('to',''),page=page-1) }}">← Précédent</a>
+{% if prev_url %}
+<a href="{{ prev_url }}">← Précédent</a>
 {% endif %}
-{% if events|length == 60 %}
-<a href="{{ url_for('activities',q=request.args.get('q',''),location=request.args.get('location',''),category=request.args.get('category',''),from=request.args.get('from',''),to=request.args.get('to',''),page=page+1) }}">Suivant →</a>
+{% if next_url %}
+<a href="{{ next_url }}">Suivant →</a>
 {% endif %}
 </nav>
 </section>

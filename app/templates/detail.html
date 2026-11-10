@@ -31,11 +31,16 @@
 </dl>
 <p class="muted">Horaires : Europe/Paris</p>
 {% if event.status == 'cancelled' %}
+<p><span class="badge badge-cancelled">Annulée</span></p>
 <p class="notice error">Cette activité a été annulée.</p>
 {% elif event.status == 'draft' %}
 <p class="notice">Brouillon — visible uniquement par vous.</p>
-{% elif event.starts_at <= now %}
-<p class="notice">Les inscriptions sont terminées.</p>
+{% elif event.ends_at <= now %}
+<p><span class="badge">Activité terminée</span></p>
+<button class="wide" type="button" disabled>Activité terminée</button>
+{% elif event.starts_at - booking_cutoff <= now %}
+<p><span class="badge">Inscriptions closes</span></p>
+<button class="wide" type="button" disabled>Inscriptions closes</button>
 {% elif booking %}
 <p class="notice success">Votre place est réservée.</p>
 <a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
@@ -52,6 +57,17 @@
 <p class="muted">Annulation possible avant le début.</p>
 {% else %}
 <a class="button wide" href="{{ url_for('login') }}">Se connecter pour participer</a>
+{% endif %}
+{% if g.user and 'admin' in g.roles %}
+<hr>
+<h2>Corriger les dates</h2>
+<p class="muted">Réservé à l’administration, y compris lorsqu’une activité est terminée.</p>
+<form method="post" class="stack" action="{{ url_for('admin_event_dates', event_id=event.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Début<input type="datetime-local" name="starts_at" value="{{ event.starts_at|inputdate }}" required></label>
+<label>Fin<input type="datetime-local" name="ends_at" value="{{ event.ends_at|inputdate }}" required></label>
+<button class="secondary">Enregistrer les dates</button>
+</form>
 {% endif %}
 </aside>
 </div>

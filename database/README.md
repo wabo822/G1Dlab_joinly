@@ -70,6 +70,10 @@ d’événement avec `SELECT ... FOR UPDATE`, dans une transaction. Les tests de
 V1 vérifient la dernière place et l’annulation concurrente. Ces garanties métier
 ne sont pas imposées à un administrateur écrivant directement en SQL.
 
+La migration `005_lifecycle_search` ajoute `events.city`. Le fait qu’une activité
+soit terminée n’est pas stocké : l’application compare `ends_at` à l’instant
+présent, en Europe/Paris.
+
 La migration `002_web` ajoute sessions, demandes de contact, limites de débit et
 jetons de réinitialisation. La migration `003_privacy` autorise le type
 `privacy` dans `legal_pages`. La migration `004_interests_pricing` ajoute

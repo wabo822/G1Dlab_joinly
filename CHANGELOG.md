@@ -1,5 +1,32 @@
 # Journal des modifications
 
+## 2026-11-09 — Activités terminées, recherche et pagination
+
+Une activité est « Terminée » dès que son heure de fin est passée, calculée en heure de Paris. Le catalogue par défaut, les recommandations et le classement ne la montrent plus. Elle reste accessible par son adresse, dans l’historique du participant, et dans le filtre « activités passées ».
+
+### Comportement
+
+- Le statut « Terminé » est calculé à l’affichage : `ends_at` est stocké en `timestamptz` et saisi en Europe/Paris. S’il manquait, la fin retenue serait la fin du jour de début (23:59:59, Paris). Aucune tâche planifiée ne change le statut.
+- « Annulée » reste un statut enregistré, distinct d’une activité simplement passée.
+- On ne peut plus réserver une activité terminée (contrôle serveur, bouton désactivé « Activité terminée »). Les inscriptions se ferment aussi quand l’activité est complète, ou `BOOKING_CUTOFF_MINUTES` minutes avant le début (0 par défaut : fermeture à l’heure de début).
+- L’organisateur ne peut plus modifier les dates d’une activité terminée. Un administrateur le peut via « Corriger les dates » sur la fiche.
+- L’historique de Mon espace liste les activités terminées et les inscriptions annulées.
+- La recherche d’`/activities` reste dans l’URL : mot-clé (titre ou description), lieu, ville, catégorie, dates, prix (gratuit, payant, maximum), tri (date, popularité, prix) et pagination de 12. Le tri par note arrivera avec les avis.
+
+### Migration
+
+`005_lifecycle_search` : colonne `events.city` (80 caractères maximum, vide par défaut).
+
+### Fichiers
+
+- `database/migrations/005_lifecycle_search.sql` — ville de l’activité.
+- `app/lifecycle.py` — fin d’activité, refus de réservation, libellé de phase.
+- `app/__init__.py` — catalogue, recommandations, classement, historique, délai avant le début, correction de dates par l’administrateur.
+- `app/seed_demo.py` — la ville des activités de démonstration est recalculée à partir du lieu.
+- `app/templates/activities.html`, `_cards.html`, `detail.html`, `account.html`, `event_form.html`, `home.html`, `classement.html` — filtres, badges, historique.
+- `tests/test_app.py` — activités passées, délai de réservation, recherche et pagination.
+- `README.md`, `docs/developpement.md`, `docs/demo-accounts.md`, `database/README.md`, `.env.example` — cycle de vie et `BOOKING_CUTOFF_MINUTES`.
+
 ## 2026-11-09 — Centres d’intérêt, recommandations, classement et tarifs simulés
 
 Les membres choisissent au moins trois centres d’intérêt, la page d’accueil s’en sert pour proposer des activités, un classement public mesure la popularité, et les activités peuvent afficher un prix en euros avec une confirmation de paiement simulée.

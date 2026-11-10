@@ -7,14 +7,16 @@ organisé.
 
 La commande ne supprime aucune donnée. Elle ne modifie pas le mot de passe, le
 nom affiché ni les rôles d’un compte déjà présent. Elle **réécrit** en revanche
-les centres d’intérêt des adresses `@demo.joinly.fr` et le prix des activités
-de démonstration, pour qu’une base déjà amorcée (comme la production) reçoive
-les icônes, les intérêts et les tarifs. Un second lancement ne crée pas de doublon.
+les centres d’intérêt des adresses `@demo.joinly.fr`, le prix et la ville des
+activités de démonstration, pour qu’une base déjà amorcée (comme la production)
+reçoive les icônes, les intérêts, les tarifs et le filtre par ville. La ville
+est déduite du lieu (tout ce qui commence par Paris reste « Paris »). Un second
+lancement ne crée pas de doublon.
 
 ## Commande
 
-Depuis la racine du dépôt, une fois la migration `004_interests_pricing` appliquée
-(`003_privacy` doit déjà l’être) :
+Depuis la racine du dépôt, une fois les migrations `004_interests_pricing` et
+`005_lifecycle_search` appliquées (`003_privacy` doit déjà l’être) :
 
 ```bash
 .venv/bin/flask --app app seed-demo

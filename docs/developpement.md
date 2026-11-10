@@ -73,6 +73,8 @@ des activités de démonstration (dix sont payantes, le reste est gratuit).
 Le relancer ne crée pas de doublon. Les mots de passe et le détail des comptes
 sont dans [docs/demo-accounts.md](demo-accounts.md).
 
+La migration `005_lifecycle_search` ajoute `events.city`. Une activité est terminée lorsque `ends_at` est passé (saisie et affichage en Europe/Paris). Ce calcul est fait à chaque requête. `BOOKING_CUTOFF_MINUTES` (défaut 0) avance la fermeture des inscriptions avant le début. L’organisateur ne modifie plus les dates d’une activité terminée ; l’administrateur le fait sur la fiche.
+
 Après la migration 004, un membre sans trois centres d’intérêt est renvoyé
 vers `/interests` et ne peut pas réserver tant qu’il n’a pas choisi. Un
 administrateur n’est pas soumis à ce passage. Une activité dont le prix est

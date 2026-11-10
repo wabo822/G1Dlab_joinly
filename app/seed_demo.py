@@ -3,7 +3,8 @@
 Passwords, display names and roles of existing accounts are left unchanged.
 Nothing is deleted. Interests of the demonstration accounts and prices of the
 demonstration activities are refreshed, so a database that already received
-the seed picks up icons, interests and tariffs. Running the command twice
+the seed picks up icons, interests, tariffs and the city derived from the
+meeting place. Running the command twice
 does not create duplicates.
 """
 import hashlib
@@ -199,6 +200,13 @@ ACTIVITIES = (
 )
 
 
+def _city(location):
+    head = location.split('·')[0].strip()
+    if head.lower().startswith('paris'):
+        return 'Paris'
+    return head[:80]
+
+
 def _at(day_offset, hour, minute):
     moment = datetime.now(PARIS) + timedelta(days=day_offset)
     local = moment.replace(hour=hour, minute=minute, second=0, microsecond=0)
@@ -328,8 +336,8 @@ def seed_demo(conn):
                 ).fetchone()['id']
                 stats['events_created'] += 1
             conn.execute(
-                'UPDATE events SET price_cents=%s WHERE id=%s',
-                (PAID_PRICES.get(title, 0), event_id),
+                'UPDATE events SET price_cents=%s, city=%s WHERE id=%s',
+                (PAID_PRICES.get(title, 0), _city(location), event_id),
             )
 
             if status == 'cancelled':

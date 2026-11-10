@@ -14,6 +14,11 @@
 <span>{{ event.category or 'Activité' }}</span>
 <span class="{{ 'price-free' if not event.price_cents else 'price-paid' }}">{{ event.price_cents|pricefr }}</span>
 </div>
+{% if event.status == 'cancelled' %}
+<p><span class="badge badge-cancelled">Annulée</span></p>
+{% elif event.ends_at <= now %}
+<p><span class="badge">Activité terminée</span></p>
+{% endif %}
 <h3>
 <a href="{{ url_for('detail',event_id=event.id) }}">{{ event.title }}</a>
 </h3>
@@ -32,7 +37,7 @@
 {% else %}
 <div class="empty">
 <h3>Aucune activité à afficher.</h3>
-{% if request.args.get('q') or request.args.get('location') or request.args.get('category') or request.args.get('from') or request.args.get('to') %}
+{% if request.args.get('q') or request.args.get('location') or request.args.get('city') or request.args.get('category') or request.args.get('from') or request.args.get('to') or request.args.get('price') or request.args.get('max') or request.args.get('when') == 'past' %}
 <p>Aucun résultat pour ces critères. Élargissez la recherche ou réinitialisez les filtres.</p>
 <a class="button secondary" href="{{ url_for('activities') }}">Réinitialiser</a>
 {% else %}

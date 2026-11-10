@@ -24,6 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
+from app.lifecycle import booking_block, is_finished
 
 PARIS = ZoneInfo('Europe/Paris')
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +38,13 @@ LEGAL_TITLES = {
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
 INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health'}
+
+
+def _env_cutoff():
+    try:
+        return max(0, int(os.environ.get('BOOKING_CUTOFF_MINUTES', '0') or 0))
+    except ValueError:
+        return 0
 
 
 def create_app(config=None):
@@ -54,6 +62,7 @@ def create_app(config=None):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
+        BOOKING_CUTOFF_MINUTES=_env_cutoff(),
     )
     if config:
         app.config.update(config)
@@ -297,6 +306,7 @@ def create_app(config=None):
             'canonical_url': base + request.path,
             'og_image': base + url_for('static', filename='logo.png'),
             'legal_titles': LEGAL_TITLES,
+            'booking_cutoff': timedelta(minutes=max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0))),
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
@@ -312,7 +322,7 @@ def create_app(config=None):
                     FROM reservations r WHERE r.event_id=e.id), 0)
                 + LEAST(e.view_count, 400)
             ) AS heat,''', 1)
-            + " WHERE e.status='published' AND e.starts_at>now() ORDER BY heat DESC, e.starts_at, e.id LIMIT %s",
+            + " WHERE e.status='published' AND e.ends_at>now() ORDER BY heat DESC, e.starts_at, e.id LIMIT %s",
             (limit,),
         )
         for index, row in enumerate(rows, 1):
@@ -323,7 +333,7 @@ def create_app(config=None):
         rows = []
         if g.user:
             rows = query(
-                event_select + ''' WHERE e.status='published' AND e.starts_at>now()
+                event_select + ''' WHERE e.status='published' AND e.ends_at>now()
                 AND e.category_id IN (SELECT category_id FROM user_interests WHERE user_id=%s)
                 ORDER BY ((SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') >= e.capacity),
                          e.starts_at, e.id
@@ -336,7 +346,7 @@ def create_app(config=None):
         rows = query(
             event_select + ''' WHERE e.id IN (
                 SELECT DISTINCT ON (category_id) id FROM events
-                WHERE status='published' AND starts_at>now() AND category_id IS NOT NULL
+                WHERE status='published' AND ends_at>now() AND category_id IS NOT NULL
                 ORDER BY category_id, starts_at, id
             ) ORDER BY e.starts_at, e.id LIMIT %s''',
             (limit,),
@@ -346,16 +356,23 @@ def create_app(config=None):
             clause = " AND NOT (e.id = ANY(%s))" if chosen else ''
             args = (chosen, limit - len(rows)) if chosen else (limit - len(rows),)
             more = query(
-                event_select + f" WHERE e.status='published' AND e.starts_at>now(){clause} ORDER BY e.starts_at, e.id LIMIT %s",
+                event_select + f" WHERE e.status='published' AND e.ends_at>now(){clause} ORDER BY e.starts_at, e.id LIMIT %s",
                 args,
             )
             rows.extend(more)
         return rows, False
 
-    def catalogue(limit=60):
-        filters = ["e.status='published'", 'e.starts_at>now()']
+    def catalogue(limit=12, paginate=True):
+        when = (request.args.get('when') or 'upcoming').strip()
+        if when not in ('upcoming', 'past'):
+            raise ValueError('Période de recherche invalide.')
+        filters = ["e.status='published'", 'e.ends_at > now()' if when == 'upcoming' else 'e.ends_at <= now()']
         args = []
-        for field, clause in [('q', '(e.title ILIKE %s OR e.description ILIKE %s)'), ('location', 'e.location ILIKE %s')]:
+        for field, clause in (
+            ('q', '(e.title ILIKE %s OR e.description ILIKE %s)'),
+            ('location', 'e.location ILIKE %s'),
+            ('city', 'e.city ILIKE %s'),
+        ):
             value = request.args.get(field, '').strip()[:200]
             if value:
                 filters.append(clause)
@@ -377,15 +394,66 @@ def create_app(config=None):
                     day += timedelta(days=1)
                 filters.append(f'e.starts_at {operator} %s')
                 args.append(day)
-        page = request.args.get('page', '1')
-        if not page.isdigit() or not 1 <= int(page) <= 10000:
-            raise ValueError('Page invalide.')
-        return query(event_select + ' WHERE ' + ' AND '.join(filters) + ' ORDER BY e.starts_at,e.id LIMIT %s OFFSET %s', (*args, limit, (int(page)-1)*limit))
+        price = (request.args.get('price') or '').strip()
+        if price == 'free':
+            filters.append('e.price_cents = 0')
+        elif price == 'paid':
+            filters.append('e.price_cents > 0')
+        elif price:
+            raise ValueError('Filtre de prix invalide.')
+        raw_max = (request.args.get('max') or '').strip().replace(' ', '').replace('€', '').replace(',', '.')
+        if raw_max:
+            try:
+                parsed = Decimal(raw_max)
+            except InvalidOperation:
+                raise ValueError('Prix maximum invalide.')
+            if parsed < 0 or parsed > Decimal('5000'):
+                raise ValueError('Prix maximum invalide.')
+            quantized = parsed.quantize(Decimal('0.01'))
+            if quantized != parsed:
+                raise ValueError('Le prix maximum ne peut pas avoir plus de deux décimales.')
+            filters.append('e.price_cents <= %s')
+            args.append(int(quantized * 100))
+        sort = (request.args.get('sort') or 'date').strip()
+        orders = {
+            'date': 'e.starts_at DESC, e.id DESC' if when == 'past' else 'e.starts_at ASC, e.id ASC',
+            'popularity': "(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') DESC, e.starts_at ASC, e.id ASC",
+            'price': 'e.price_cents ASC, e.starts_at ASC, e.id ASC',
+        }
+        if sort not in orders:
+            raise ValueError('Tri invalide.')
+        page = 1
+        if paginate:
+            page = request.args.get('page', '1')
+            if not str(page).isdigit() or not 1 <= int(page) <= 10000:
+                raise ValueError('Page invalide.')
+            page = int(page)
+        where = ' WHERE ' + ' AND '.join(filters)
+        total = query('SELECT count(*) AS n FROM events e' + where, tuple(args), True)['n']
+        rows = query(
+            event_select + where + f' ORDER BY {orders[sort]} LIMIT %s OFFSET %s',
+            (*args, limit, (page - 1) * limit if paginate else 0),
+        )
+        pages = max(1, (total + limit - 1) // limit) if limit else 1
+        return {'events': rows, 'total': total, 'page': page, 'pages': pages}
+
+    def activity_page_url(number):
+        params = {}
+        for key in ('q', 'location', 'city', 'category', 'from', 'to', 'price', 'max', 'sort', 'when'):
+            value = request.args.get(key, '').strip()
+            if value:
+                params[key] = value
+        if number > 1:
+            params['page'] = number
+        return url_for('activities', **params)
 
     @app.get('/')
     def home():
         recommended, personal = recommendations()
-        return render_template('home.html', events=catalogue(6), recommended=recommended, personal=personal, trending=ranked_events(5))
+        return render_template(
+            'home.html', events=catalogue(6, paginate=False)['events'],
+            recommended=recommended, personal=personal, trending=ranked_events(5),
+        )
 
     @app.get('/classement')
     def classement():
@@ -393,7 +461,14 @@ def create_app(config=None):
 
     @app.get('/activities')
     def activities():
-        return render_template('activities.html', events=catalogue(), categories=query('SELECT * FROM categories ORDER BY name'))
+        found = catalogue()
+        return render_template(
+            'activities.html', events=found['events'], total=found['total'], page=found['page'], pages=found['pages'],
+            prev_url=activity_page_url(found['page'] - 1) if found['page'] > 1 else None,
+            next_url=activity_page_url(found['page'] + 1) if found['page'] < found['pages'] else None,
+            categories=query('SELECT * FROM categories ORDER BY name'),
+            cities=query("SELECT DISTINCT city FROM events WHERE status='published' AND btrim(city) <> '' ORDER BY city"),
+        )
 
     @app.get('/activities/<int:event_id>')
     def detail(event_id):
@@ -489,11 +564,15 @@ def create_app(config=None):
             flash('Profil enregistré.', 'success')
             return redirect(url_for('account'))
         prefs = query('SELECT * FROM member_preferences WHERE user_id=%s', (g.user['id'],), True)
-        bookings = query('''SELECT r.*, e.title,e.starts_at,e.location FROM reservations r JOIN events e ON e.id=r.event_id
+        bookings = query('''SELECT r.*, e.title, e.starts_at, e.ends_at, e.location, e.status AS event_status
+            FROM reservations r JOIN events e ON e.id=r.event_id
             WHERE r.member_id=%s ORDER BY e.starts_at DESC''', (g.user['id'],))
+        moment = datetime.now(timezone.utc)
+        upcoming = [row for row in bookings if row['status'] == 'confirmed' and row['ends_at'] > moment]
+        history = [row for row in bookings if row not in upcoming]
         selected = {row['category_id'] for row in query('SELECT category_id FROM user_interests WHERE user_id=%s', (g.user['id'],))}
         return render_template(
-            'account.html', preferences=prefs, bookings=bookings, selected=selected, interest_minimum=minimum,
+            'account.html', preferences=prefs, bookings=upcoming, history=history, selected=selected, interest_minimum=minimum,
             categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
         )
 
@@ -523,8 +602,19 @@ def create_app(config=None):
             if not event:
                 abort(404)
             count = query("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (event_id,), True)['n']
-            if event['status'] != 'published' or event['starts_at'] <= datetime.now(timezone.utc) or count >= event['capacity']:
-                raise ValueError('Cette activité n’a plus de place disponible ou les inscriptions sont fermées.')
+            reason = booking_block(
+                event,
+                cutoff_minutes=max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0)),
+                available=event['capacity'] - count,
+            )
+            if reason:
+                raise ValueError({
+                    'finished': 'Cette activité est terminée.',
+                    'cutoff': 'Les inscriptions sont closes.',
+                    'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+                    'cancelled': 'Cette activité est annulée.',
+                    'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+                }[reason])
             if event['price_cents'] > 0 and request.form.get('payment_simulated') != '1':
                 raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
             db().execute('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s)', (g.user['id'], event_id))
@@ -580,7 +670,13 @@ def create_app(config=None):
         status = text('status')
         if status not in ('draft', 'published') or starts <= datetime.now(timezone.utc):
             raise ValueError('Choisissez un état valide et une date future.')
-        return dict(title=text('title', 180), description=text('description', 10000), location=text('location', 200), starts_at=starts, ends_at=ends, capacity=capacity, category_id=category_id, status=status, price_cents=money_cents())
+        payload = dict(title=text('title', 180), description=text('description', 10000), location=text('location', 200), starts_at=starts, ends_at=ends, capacity=capacity, category_id=category_id, status=status, price_cents=money_cents())
+        if 'city' in request.form:
+            city = request.form.get('city', '').strip()
+            if len(city) > 80:
+                raise ValueError('La ville est trop longue (80 caractères maximum).')
+            payload['city'] = city
+        return payload
 
     @app.route('/organizer/new', methods=['GET', 'POST'])
     @app.route('/organizer/<int:event_id>/edit', methods=['GET', 'POST'])
@@ -594,6 +690,8 @@ def create_app(config=None):
             with db().transaction():
                 if event_id:
                     event = query('SELECT * FROM events WHERE id=%s AND organizer_id=%s FOR UPDATE', (event_id, g.user['id']), True)
+                    if is_finished(event):
+                        raise ValueError('Une activité terminée ne peut plus changer de dates. Un administrateur peut les corriger.')
                     if event['status'] == 'cancelled' or event['starts_at'] <= datetime.now(timezone.utc):
                         raise ValueError('Une activité annulée ou commencée ne peut plus être modifiée.')
                     counts = query("SELECT count(*) AS total, count(*) FILTER (WHERE status='confirmed') AS active FROM reservations WHERE event_id=%s", (event_id,), True)
@@ -716,6 +814,25 @@ def create_app(config=None):
         db().execute('UPDATE events SET price_cents=%s WHERE id=%s', (cents, event_id))
         flash('Prix mis à jour.', 'success')
         return redirect(url_for('admin') + '#tarifs')
+
+    @app.post('/admin/events/<int:event_id>/dates')
+    @require('admin')
+    def admin_event_dates(event_id):
+        if not query('SELECT id FROM events WHERE id=%s', (event_id,), True):
+            abort(404)
+        try:
+            starts = datetime.fromisoformat(text('starts_at')).replace(tzinfo=PARIS)
+            ends = datetime.fromisoformat(text('ends_at')).replace(tzinfo=PARIS)
+        except ValueError:
+            raise ValueError('Vérifiez les dates.')
+        for instant in (starts, ends):
+            if instant.astimezone(timezone.utc).astimezone(PARIS).replace(tzinfo=None) != instant.replace(tzinfo=None):
+                raise ValueError('Cette heure n’existe pas lors du changement d’heure.')
+        if ends <= starts:
+            raise ValueError('La fin doit être après le début.')
+        db().execute('UPDATE events SET starts_at=%s, ends_at=%s WHERE id=%s', (starts, ends, event_id))
+        flash('Dates corrigées.', 'success')
+        return redirect(url_for('detail', event_id=event_id))
 
     @app.post('/admin/users/<int:user_id>')
     @require('admin')

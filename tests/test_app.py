@@ -424,6 +424,8 @@ def test_seed_demo_is_idempotent_and_keeps_existing_accounts(app, db):
     assert third['events_created'] == 0
     assert third['users_created'] == 0
     assert db.execute("SELECT price_cents FROM events WHERE title='Yoga au parc'").fetchone()['price_cents'] == 800
+    assert db.execute("SELECT city FROM events WHERE title='Balade commentée au Luxembourg'").fetchone()['city'] == 'Paris'
+    assert db.execute("SELECT city FROM events WHERE title='Tartes de saison'").fetchone()['city'] == 'Montreuil'
     assert member.get('/').status_code == 200
     assert 'Recommandé pour vous' in member.get('/').text
 
@@ -550,3 +552,112 @@ def test_trusted_proxy_https_forms_and_hosts(app):
     response = client.post('/contact',headers=headers,data={'csrf_token':token,'name':'Proxy test','email':'proxy@example.test','subject':'HTTPS','message':'Test'})
     assert response.status_code == 302
     assert client.get('/',headers={'Host':'untrusted.example'}).status_code == 400
+
+
+def test_finished_activities_stay_visible_but_leave_the_lists(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    user(db, 'admin@example.test', ('member', 'admin'), interests=False)
+    user(db, 'guest@example.test')
+    eid = event(db, owner, 4)
+    db.execute(
+        """UPDATE events SET title='Sortie finie', city='Paris', price_cents=1000,
+           starts_at=now()-interval '3 hours', ends_at=now()-interval '1 hour' WHERE id=%s""",
+        (eid,),
+    )
+    db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (
+        db.execute("SELECT id FROM users WHERE email='guest@example.test'").fetchone()['id'], eid,
+    ))
+    public = app.test_client()
+    assert 'Sortie finie' not in public.get('/activities').text
+    assert 'Sortie finie' not in public.get('/').text
+    assert 'Sortie finie' not in public.get('/classement').text
+    archive = public.get('/activities?when=past')
+    assert archive.status_code == 200
+    assert 'Sortie finie' in archive.text and 'Activité terminée' in archive.text
+    detail = public.get(f'/activities/{eid}')
+    assert detail.status_code == 200 and 'Activité terminée' in detail.text and 'Annulée' not in detail.text
+    guest = login(app, 'guest@example.test')
+    assert guest.post(f'/activities/{eid}/reserve').status_code == 400
+    account = guest.get('/account').text
+    assert 'Historique' in account and 'Sortie finie' in account
+    organizer = login(app, 'owner@example.test')
+    form = event_form(db, eid)
+    upcoming = datetime.now(ZoneInfo('Europe/Paris')) + timedelta(days=4)
+    form['starts_at'] = upcoming.strftime('%Y-%m-%dT10:00')
+    form['ends_at'] = upcoming.strftime('%Y-%m-%dT12:00')
+    denied = organizer.post(f'/organizer/{eid}/edit', data=form)
+    assert denied.status_code == 400 and 'administrateur' in denied.text
+    assert guest.post(f'/admin/events/{eid}/dates', data={'starts_at': form['starts_at'], 'ends_at': form['ends_at']}).status_code == 403
+    admin = login(app, 'admin@example.test')
+    assert admin.post(f'/admin/events/{eid}/dates', data={'starts_at': form['starts_at'], 'ends_at': form['ends_at']}).status_code == 302
+    stored = db.execute('SELECT starts_at FROM events WHERE id=%s', (eid,)).fetchone()['starts_at']
+    assert stored > datetime.now(ZoneInfo('Europe/Paris'))
+    cancelled = event(db, owner, 4)
+    db.execute("UPDATE events SET title='Sortie annulée', status='cancelled' WHERE id=%s", (cancelled,))
+    cancelled_page = public.get(f'/activities/{cancelled}').text
+    assert 'Annulée' in cancelled_page and 'Activité terminée' not in cancelled_page
+    assert 'Sortie annulée' not in public.get('/activities?when=past').text
+
+
+def test_booking_cutoff_closes_before_the_start(app, db):
+    owner = user(db, roles=('member', 'organizer'))
+    user(db, 'guest@example.test')
+    eid = event(db, owner, 4)
+    db.execute(
+        "UPDATE events SET starts_at=now()+interval '30 minutes', ends_at=now()+interval '2 hours' WHERE id=%s",
+        (eid,),
+    )
+    app.config['BOOKING_CUTOFF_MINUTES'] = 180
+    guest = login(app, 'guest@example.test')
+    assert guest.post(f'/activities/{eid}/reserve').status_code == 400
+    assert 'Inscriptions closes' in guest.get(f'/activities/{eid}').text
+    app.config['BOOKING_CUTOFF_MINUTES'] = 0
+    assert guest.post(f'/activities/{eid}/reserve').status_code == 302
+
+
+def test_activity_search_filters_sort_and_pagination(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    fans = [user(db, f'fan{i}@example.test') for i in range(3)]
+    cheap = event(db, owner, 5)
+    costly = event(db, owner, 5)
+    popular = event(db, owner, 5)
+    db.execute("UPDATE events SET title='Atelier gratuit', city='Paris', price_cents=0, description='Soupe de saison' WHERE id=%s", (cheap,))
+    db.execute(
+        """UPDATE events SET title='Atelier payant', city='Lyon', price_cents=2000,
+           starts_at=now()+interval '4 days', ends_at=now()+interval '4 days 2 hours' WHERE id=%s""",
+        (costly,),
+    )
+    db.execute(
+        """UPDATE events SET title='Atelier suivi', city='Paris', price_cents=500,
+           starts_at=now()+interval '5 days', ends_at=now()+interval '5 days 2 hours' WHERE id=%s""",
+        (popular,),
+    )
+    for fan in fans:
+        db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (fan, popular))
+    client = app.test_client()
+    assert 'Atelier gratuit' in client.get('/activities?q=soupe').text
+    paris = client.get('/activities?city=Paris').text
+    assert 'Atelier gratuit' in paris and 'Atelier payant' not in paris
+    paid = client.get('/activities?price=paid').text
+    assert 'Atelier payant' in paid and 'Atelier gratuit' not in paid
+    assert 'Atelier payant' not in client.get('/activities?max=10').text
+    assert 'Atelier payant' in client.get('/activities?max=20').text
+    by_price = client.get('/activities?sort=price').text
+    assert by_price.index('Atelier gratuit') < by_price.index('Atelier payant')
+    by_popularity = client.get('/activities?sort=popularity').text
+    assert by_popularity.index('Atelier suivi') < by_popularity.index('Atelier gratuit')
+    assert client.get('/activities?when=later').status_code == 400
+    assert client.get('/activities?sort=rating').status_code == 400
+    assert client.get('/activities?max=abc').status_code == 400
+    for index in range(13):
+        created = event(db, owner, 3)
+        db.execute(
+            """UPDATE events SET title=%s, starts_at=now()+interval '10 days', ends_at=now()+interval '10 days 1 hour'
+               WHERE id=%s""",
+            (f'Pageitem {index:02d}', created),
+        )
+    first = client.get('/activities?q=Pageitem').text
+    second = client.get('/activities?q=Pageitem&page=2').text
+    assert 'Pageitem 00' in first and 'Pageitem 12' not in first
+    assert 'Pageitem 12' in second and 'Suivant' not in second
+    assert 'Précédent' in second
