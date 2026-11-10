@@ -1016,6 +1016,21 @@ hr {
     scroll-behavior:auto!important;
   }
 }
+.bell {
+  position:relative;
+  font-weight:700;
+}
+.bell-count {
+  display:inline-block;
+  margin-left:6px;
+  background:#a93131;
+  color:#fff;
+  border-radius:99px;
+  min-width:1.3rem;
+  padding:0 6px;
+  font-size:.75rem;
+  text-align:center;
+}
 .activity-map {
   height:320px;
   border-radius:16px;

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Notifications — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section">
+<div class="section-head">
+<div>
+<p class="eyebrow">NOTIFICATIONS</p>
+<h1>Ce qui vous concerne.</h1>
+</div>
+{% if items %}
+<form method="post" action="{{ url_for('read_notifications') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="secondary small">Tout marquer comme lu</button>
+</form>
+{% endif %}
+</div>
+{% for item in items %}
+<article class="panel booking-row">
+{% if not item.read_at %}<span class="badge badge-published">Non lu</span>{% endif %}
+<h2>{{ item.title }}</h2>
+<p>{{ item.body }}</p>
+<p class="muted">{{ item.created_at|datefr }}</p>
+{% if item.link %}<a href="{{ item.link }}">Voir</a>{% endif %}
+</article>
+{% else %}
+<div class="empty">
+<h2>Aucune notification.</h2>
+<p>Les confirmations, changements et rappels apparaîtront ici.</p>
+</div>
+{% endfor %}
+</section>
+{% endblock %}

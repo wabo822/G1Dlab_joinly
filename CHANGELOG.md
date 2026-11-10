@@ -1,5 +1,26 @@
 # Journal des modifications
 
+## 2026-11-09 — Notifications et rappels
+
+Une cloche indique le nombre de notifications non lues. Une réservation confirmée, un changement, une annulation, un rappel 24 h avant, une nouvelle activité d’un organisateur suivi et un nouvel avis créent une notification. La confirmation, le changement, l’annulation et le rappel partent aussi par le SMTP déjà configuré (Brevo). Un échec d’envoi est journalisé et ne fait pas échouer la requête. Sans SMTP, le message est écrit dans `dev_outbox` et dans le journal.
+
+`flask --app app send-reminders` est idempotent (`reservations.reminder_sent_at`). Exemple de planification, non installé par le script de service :
+
+```bash
+sudo cp deploy/joinly-reminders.service deploy/joinly-reminders.timer /etc/systemd/system/
+sudo systemctl enable --now joinly-reminders.timer
+```
+
+### Fichiers
+
+- `database/migrations/010_notifications.sql` — `notifications`, `dev_outbox`, `reservations.reminder_sent_at`.
+- `app/notify.py`, `app/__init__.py` — création, cloche, commande.
+- `app/templates/base.html`, `notifications.html`, `app/static/app.css`
+- `deploy/joinly-reminders.service`, `deploy/joinly-reminders.timer`
+- `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur la carte (#8).
+
 ## 2026-11-09 — Carte OpenStreetMap
 
 La fiche d’une activité qui a une latitude et une longitude affiche une carte Leaflet (CDN unpkg) sur le fond OpenStreetMap. La politique de sécurité autorise ces ressources. Les activités de démonstration reçoivent les coordonnées réelles de leur lieu en Île-de-France, y compris si elles existaient déjà.
