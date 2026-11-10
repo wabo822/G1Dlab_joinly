@@ -1,0 +1,10 @@
+{% extends 'admin_base.html' %}
+{% block title %}Catégories — Administration{% endblock %}
+{% block admin %}
+<h1>Catégories</h1>
+{% for row in rows %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ row.id }}">
+<input name="name" value="{{ row.name }}"><input name="icon" value="{{ row.icon }}"><button>Enregistrer</button></form>
+{% endfor %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input name="name" placeholder="Nom"><input name="icon" placeholder="Icône"><button>Ajouter</button></form>
+{% endblock %}

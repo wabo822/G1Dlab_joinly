@@ -1,5 +1,18 @@
 # Journal des modifications
 
+## 2026-11-09 — Administration complète
+
+L’administration a une barre latérale. Le tableau de bord affiche les comptes, les activités ouvertes, les réservations, le revenu simulé, la note et les messages en attente. Les listes de comptes, d’activités, de réservations et d’avis se filtrent et s’exportent en CSV. L’admin modifie le texte et la note d’un avis, bannit en lot, consulte un compte (bandeau « Consultation en tant que », journalisé), règle l’annonce, le délai de réservation, les poids du classement et les activités à la une. Une demande pour devenir organisateur se traite dans la même zone.
+
+### Fichiers
+
+- `database/migrations/015_admin.sql` — réglages, journal, demandes, statut banni, activités épinglées, types de notification.
+- `app/admin_office.py`, `app/__init__.py`
+- `app/templates/admin_base.html` et gabarits `admin_*.html`, `admin.html`, `base.html`, `home.html`, `account.html`
+- `app/static/app.css`, `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur le tableau de bord organisateur (#15).
+
 ## 2026-11-09 — Tableau de bord organisateur
 
 `/organizer/tableau` résume les consultations, le taux de remplissage, le revenu simulé (prix des inscriptions confirmées moins les remboursements), la note moyenne, les activités les plus suivies et un graphique SVG des réservations confirmées des 30 derniers jours.

@@ -1,0 +1,31 @@
+{% extends 'admin_base.html' %}
+{% block title %}{{ event.title }} — Administration{% endblock %}
+{% block admin %}
+<h1>{{ event.title }}</h1>
+<form method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Titre<input name="title" value="{{ event.title }}" required></label>
+<label>Description<textarea name="description" required>{{ event.description }}</textarea></label>
+<label>Lieu<input name="location" value="{{ event.location }}" required></label>
+<label>Ville<input name="city" value="{{ event.city }}"></label>
+<label>Places<input name="capacity" value="{{ event.capacity }}" required></label>
+<label>Prix<input name="price" value="{{ event.price_cents // 100 }},{{ '%02d'|format(event.price_cents % 100) }}" required></label>
+<label>État<select name="status"><option value="published">Publié</option><option value="draft">Brouillon</option><option value="cancelled">Annulé</option></select></label>
+<label>Politique<select name="cancellation_policy"><option value="flexible">Flexible</option><option value="moderate">Modérée</option><option value="strict">Stricte</option></select></label>
+<label class="check"><input type="checkbox" name="pinned" {% if event.pinned %}checked{% endif %}>À la une</label>
+<button>Enregistrer</button>
+</form>
+<p><a href="{{ url_for('admin_attendees_csv', event_id=event.id) }}">Export participants</a></p>
+<h2>Participants</h2>
+{% for row in people %}<p>{{ row.display_name }} · {{ row.status }} · {{ row.code or '' }}</p>{% endfor %}
+<h2>Avis</h2>
+{% for row in reviews %}
+<form method="post" action="{{ url_for('admin_review_text', review_id=row.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Note<input name="rating" value="{{ row.rating }}"></label>
+<label>Commentaire<textarea name="comment">{{ row.comment }}</textarea></label>
+<label class="check"><input type="checkbox" name="hidden" {% if row.hidden %}checked{% endif %}>Masquer</label>
+<button>Modifier l’avis</button>
+</form>
+{% endfor %}
+{% endblock %}

@@ -42,7 +42,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster'}
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster', 'stop_impersonation'}
 
 
 def _env_cutoff():
@@ -104,6 +104,8 @@ def create_app(config=None):
     def load_user():
         g.user = None
         g.roles = set()
+        g.impersonator = None
+        g.impersonating = False
         token = session.get('auth_token')
         if token:
             g.user = query('''SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at FROM users u
@@ -111,6 +113,16 @@ def create_app(config=None):
                 WHERE s.token_hash=%s AND s.expires_at>now() AND u.status='active' ''', (digest(token),), True)
             if g.user:
                 g.roles = {r['name'] for r in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (g.user['id'],))}
+                viewed = session.get('view_as')
+                if viewed and 'admin' in g.roles:
+                    target = query("SELECT id, email, display_name, status, email_verified_at FROM users WHERE id=%s AND status='active'", (int(viewed),), True)
+                    if target and target['id'] != g.user['id']:
+                        g.impersonator = g.user
+                        g.user = target
+                        g.roles = {r['name'] for r in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (target['id'],))}
+                        g.impersonating = True
+                    else:
+                        session.pop('view_as', None)
             else:
                 session.clear()
 
@@ -314,6 +326,12 @@ def create_app(config=None):
     def public_base():
         return app.config.get('PUBLIC_BASE_URL') or request.url_root.rstrip('/')
 
+    def cutoff_minutes():
+        row = query('SELECT booking_cutoff_minutes FROM site_settings WHERE id=1', one=True)
+        if row is not None:
+            return max(0, int(row['booking_cutoff_minutes']))
+        return max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0))
+
     @app.context_processor
     def context():
         base = public_base()
@@ -323,7 +341,7 @@ def create_app(config=None):
             'canonical_url': base + request.path,
             'og_image': base + url_for('static', filename='logo.png'),
             'legal_titles': LEGAL_TITLES,
-            'booking_cutoff': timedelta(minutes=max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0))),
+            'booking_cutoff': timedelta(minutes=cutoff_minutes()),
             'unread': query(
                 'SELECT count(*) AS n FROM notifications WHERE user_id=%s AND read_at IS NULL',
                 (g.user['id'],), True,
@@ -331,6 +349,7 @@ def create_app(config=None):
             'policy_labels': POLICY_LABELS,
             'refund_preview': refund_cents,
             'google_enabled': bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET')),
+            'settings': query('SELECT * FROM site_settings WHERE id=1', one=True),
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
@@ -343,10 +362,12 @@ def create_app(config=None):
         rows = query(
             event_select.replace('SELECT e.*,', '''SELECT e.*, (
                 (SELECT count(*) FROM reservations r
-                    WHERE r.event_id=e.id AND r.status='confirmed' AND r.reserved_at > now() - interval '30 days') * 10
+                    WHERE r.event_id=e.id AND r.status='confirmed' AND r.reserved_at > now() - interval '30 days')
+                    * (SELECT heat_recent_weight FROM site_settings WHERE id=1)
                 + COALESCE((SELECT (count(*) FILTER (WHERE r.status='confirmed') * 100) / NULLIF(e.capacity, 0)
                     FROM reservations r WHERE r.event_id=e.id), 0)
-                + LEAST(e.view_count, 400)
+                    * (SELECT heat_fill_weight FROM site_settings WHERE id=1)
+                + LEAST(e.view_count, (SELECT heat_view_cap FROM site_settings WHERE id=1))
             ) AS heat,''', 1)
             + " WHERE e.status='published' AND e.ends_at>now() ORDER BY heat DESC, e.starts_at, e.id LIMIT %s",
             (limit,),
@@ -478,9 +499,12 @@ def create_app(config=None):
     @app.get('/')
     def home():
         recommended, personal = recommendations()
+        pinned = covers.decorate(query(
+            event_select + " WHERE e.pinned AND e.status='published' AND e.ends_at>now() ORDER BY e.starts_at, e.id LIMIT 6"
+        ))
         return render_template(
             'home.html', events=catalogue(6, paginate=False)['events'],
-            recommended=recommended, personal=personal, trending=ranked_events(5),
+            recommended=recommended, personal=personal, trending=ranked_events(5), pinned=pinned,
         )
 
     @app.get('/classement')
@@ -935,7 +959,7 @@ def create_app(config=None):
             count = query("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (event_id,), True)['n']
             reason = booking_block(
                 event,
-                cutoff_minutes=max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0)),
+                cutoff_minutes=cutoff_minutes(),
                 available=event['capacity'] - count,
             )
             if reason:
@@ -1458,7 +1482,23 @@ def create_app(config=None):
                 ORDER BY rv.created_at DESC LIMIT 40'''),
             refundable=query('''SELECT r.id, u.display_name, e.title, e.price_cents, r.refund_cents, r.refund_status
                 FROM reservations r JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id
-                WHERE e.price_cents > 0 ORDER BY r.reserved_at DESC LIMIT 20'''))
+                WHERE e.price_cents > 0 ORDER BY r.reserved_at DESC LIMIT 20'''),
+            kpis=query('''SELECT
+                (SELECT count(*) FROM users) AS users,
+                (SELECT count(*) FROM events WHERE status='published' AND ends_at>now()) AS active_events,
+                (SELECT count(*) FROM reservations WHERE status='confirmed') AS reservations,
+                (SELECT COALESCE(SUM(price_cents),0) FROM (
+                    SELECT e.price_cents * (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS price_cents FROM events e
+                ) s) AS revenue,
+                (SELECT round(avg(rating)::numeric,1) FROM reviews WHERE NOT hidden) AS rating,
+                (SELECT count(*) FROM contact_requests WHERE NOT resolved) AS pending''', one=True),
+            signup_chart=line_chart(
+                [row['n'] for row in query('''SELECT
+                    (SELECT count(*) FROM users u WHERE u.created_at::date = d::date) AS n,
+                    to_char(d::date, 'DD/MM') AS label
+                    FROM generate_series(current_date - 13, current_date, interval '1 day') AS d''')],
+                [row['label'] for row in query('''SELECT to_char(d::date, 'DD/MM') AS label
+                    FROM generate_series(current_date - 13, current_date, interval '1 day') AS d''')]))
 
     @app.post('/admin/events/<int:event_id>/price')
     @require('admin')
@@ -1686,5 +1726,8 @@ def create_app(config=None):
         """Email and notify confirmed attendees whose activity starts within 24 hours."""
         count = notify.send_reminders(app, query, db)
         click.echo(f'Reminders sent: {count}')
+
+    from app.admin_office import register_office
+    register_office(app, query, db, text, email_value, money_cents)
 
     return app

@@ -1,10 +1,18 @@
-{% extends 'base.html' %}
+{% extends 'admin_base.html' %}
 {% block title %}Administration — Joinly{% endblock %}
-{% block robots %}noindex,nofollow{% endblock %}
-{% block content %}
+{% block admin %}
 <section class="container section">
 <p class="eyebrow">ADMINISTRATION</p>
 <h1>Prendre soin de la communauté.</h1>
+<div class="admin-grid">
+<article class="panel"><h2>Comptes</h2><p>{{ kpis.users }}</p></article>
+<article class="panel"><h2>Activités ouvertes</h2><p>{{ kpis.active_events }}</p></article>
+<article class="panel"><h2>Réservations</h2><p>{{ kpis.reservations }}</p></article>
+<article class="panel"><h2>Revenu simulé</h2><p>{{ kpis.revenue|pricefr }}</p></article>
+<article class="panel"><h2>Note moyenne</h2><p>{{ kpis.rating or '—' }}</p></article>
+<article class="panel"><h2>À modérer</h2><p>{{ kpis.pending }} messages</p></article>
+</div>
+{{ signup_chart }}
 <nav class="actions">
 <a href="#users">Comptes</a>
 <a href="#faq">FAQ</a>

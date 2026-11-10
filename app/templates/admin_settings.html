@@ -1,0 +1,20 @@
+{% extends 'admin_base.html' %}
+{% block title %}Réglages — Administration{% endblock %}
+{% block admin %}
+<h1>Réglages</h1>
+<form method="post" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Nom du site<input name="site_name" value="{{ settings.site_name }}" required></label>
+<label>Annonce<input name="banner" value="{{ settings.banner }}"></label>
+<label>Délai avant le début (minutes)<input name="booking_cutoff_minutes" value="{{ settings.booking_cutoff_minutes }}"></label>
+<label>Politique par défaut<select name="default_cancellation_policy"><option value="flexible">Flexible</option><option value="moderate">Modérée</option><option value="strict">Stricte</option></select></label>
+<label>Poids des réservations récentes<input name="heat_recent_weight" value="{{ settings.heat_recent_weight }}"></label>
+<label>Poids du remplissage<input name="heat_fill_weight" value="{{ settings.heat_fill_weight }}"></label>
+<label>Plafond des vues<input name="heat_view_cap" value="{{ settings.heat_view_cap }}"></label>
+{% for event in featured %}
+<input type="hidden" name="listed_ids" value="{{ event.id }}">
+<label class="check"><input type="checkbox" name="pinned_ids" value="{{ event.id }}" {% if event.pinned %}checked{% endif %}>{{ event.title }}</label>
+{% endfor %}
+<button>Enregistrer</button>
+</form>
+{% endblock %}

@@ -97,6 +97,13 @@
 {% if 'organizer' in g.roles %}
 <hr>
 <a href="{{ url_for('organizer') }}">Gérer mes activités →</a>
+{% else %}
+<hr>
+<form method="post" action="{{ url_for('request_organizer') }}" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Demander le rôle organisateur<textarea name="message" maxlength="500" placeholder="Présentez brièvement vos activités"></textarea></label>
+<button class="secondary">Envoyer la demande</button>
+</form>
 {% endif %}
 <p><a href="{{ url_for('tickets_page') }}">Mes billets</a></p>
 </aside>

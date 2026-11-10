@@ -1031,6 +1031,22 @@ hr {
   font-size:.75rem;
   text-align:center;
 }
+.admin-shell {
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr);
+  gap:28px;
+  width:min(1200px,calc(100% - 48px));
+  margin:32px auto 64px;
+}
+.admin-side {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.admin-side a { font-weight:700; }
+@media(max-width:800px) {
+  .admin-shell { grid-template-columns:1fr; }
+}
 .activity-map {
   height:320px;
   border-radius:16px;

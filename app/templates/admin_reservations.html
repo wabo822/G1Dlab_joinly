@@ -1,0 +1,7 @@
+{% extends 'admin_base.html' %}
+{% block title %}Réservations — Administration{% endblock %}
+{% block admin %}
+<h1>Réservations</h1>
+<a href="{{ url_for('admin_reservations_csv') }}">Export CSV</a>
+{% for row in rows %}<p>{{ row.title }} · {{ row.display_name }} · {{ row.email }} · {{ row.status }}</p>{% endfor %}
+{% endblock %}
