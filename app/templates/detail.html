@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from '_avatar.html' import avatar %}
 {% block title %}{{ event.title }} — Joinly{% endblock %}
 {% block description %}{{ event.category or 'Activité' }} · {{ event.location }} · {{ event.starts_at|datefr }}. {{ event.description|striptags|truncate(140, true) }}{% endblock %}
 {% block og_image %}{{ share_image }}{% endblock %}
@@ -10,7 +11,7 @@
 <article>
 <p class="eyebrow">{{ event.category_icon }} {{ event.category or 'ACTIVITÉ' }} · {{ event.price_cents|pricefr }}</p>
 <h1>{{ event.title }}</h1>
-<p class="lead">Proposé par <a href="{{ url_for('organizer_public', user_id=event.organizer_id) }}">{{ event.organizer }}</a>{% if event.rating_count %} · {{ event.rating_avg }} ★ ({{ event.rating_count }} avis){% endif %}</p>
+<p class="lead avatar-row">{{ avatar({'id': event.organizer_id, 'display_name': event.organizer, 'avatar_path': event.organizer_avatar_path}) }} <span>Proposé par <a href="{{ url_for('organizer_public', user_id=event.organizer_id) }}">{{ event.organizer }}</a></span>{% if event.rating_count %} · {{ event.rating_avg }} ★ ({{ event.rating_count }} avis){% endif %}</p>
 <div class="detail-art{% if event.cover_href %} has-cover{% endif %}">
 {% if event.cover_href %}
 <img class="cover" src="{{ event.cover_href }}" alt="">
@@ -155,7 +156,7 @@
 {% for item in reviews %}
 {% if not item.hidden or (mine and item.id == mine.id) %}
 <article class="panel booking-row">
-<strong>{{ item.rating }} ★ · {{ item.display_name }}</strong>
+<p class="avatar-row">{{ avatar({'id': item.author_id, 'display_name': item.display_name, 'avatar_path': item.avatar_path}) }} <strong>{{ item.rating }} ★ · {{ item.display_name }}</strong></p>
 {% if item.hidden %}<span class="badge">Masqué</span>{% endif %}
 <p class="prose">{{ item.comment }}</p>
 </article>

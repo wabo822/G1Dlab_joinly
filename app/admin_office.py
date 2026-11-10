@@ -61,7 +61,7 @@ def register_office(app, query, db, text, email_value, money_cents):
         where = ' AND '.join(filters)
         total = query(f'SELECT count(*) AS n FROM users WHERE {where}', args, True)['n']
         rows = query(
-            f'''SELECT id, email, display_name, status, created_at FROM users WHERE {where}
+            f'''SELECT id, email, display_name, status, created_at, avatar_path FROM users WHERE {where}
                 ORDER BY id DESC LIMIT %s OFFSET %s''',
             (*args, PAGE, (current - 1) * PAGE),
         )

@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
+{% from '_avatar.html' import avatar %}
 {% block title %}{{ person.display_name }} — organisateur — Joinly{% endblock %}
 {% block description %}Activités proposées par {{ person.display_name }} sur Joinly.{% endblock %}
 {% block content %}
 <section class="container section">
 <p class="eyebrow">ORGANISATEUR</p>
-<h1>{{ person.display_name }}</h1>
+<h1 class="avatar-row">{{ avatar(person, 'lg') }} <span>{{ person.display_name }}</span></h1>
 <p class="lead">
 {{ person.followers }} abonné{{ 's' if person.followers != 1 else '' }}
 {% if person.rating_count %} · {{ person.rating_avg }} ★ sur {{ person.rating_count }} avis{% else %} · pas encore d’avis{% endif %}

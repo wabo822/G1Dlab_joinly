@@ -1,8 +1,15 @@
 {% extends 'admin_base.html' %}
+{% from '_avatar.html' import avatar %}
 {% block title %}{{ person.display_name }} — Administration{% endblock %}
 {% block admin %}
-<h1>{{ person.display_name }}</h1>
+<h1 class="avatar-row">{{ avatar(person, 'md') }} <span>{{ person.display_name }}</span></h1>
 <p>{{ person.email }} · {{ person.status }} · {{ person.roles|join(', ') }}</p>
+{% if person.avatar_path %}
+<form method="post" action="{{ url_for('admin_remove_avatar', user_id=person.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="secondary small">Retirer la photo de profil</button>
+</form>
+{% endif %}
 <form method="post" action="{{ url_for('admin_user_save', user_id=person.id) }}" class="panel stack">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Nom<input name="display_name" value="{{ person.display_name }}" required></label>

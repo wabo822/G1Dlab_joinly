@@ -1263,3 +1263,76 @@ def test_admin_dashboard_has_period_kpis_and_keeps_moderation_forms(app, db):
     assert '30 jours' in page.text
     assert 'id="faq"' in page.text and 'id="legal"' in page.text and 'id="contact"' in page.text
     assert office.get('/admin?periode=90').status_code == 200
+
+def test_avatar_upload_change_remove_and_initials_fallback(app, db, tmp_path):
+    from io import BytesIO
+    from pathlib import Path as P
+
+    from PIL import Image
+
+    app.config['UPLOAD_DIR'] = str(tmp_path)
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    member = user(db, 'face@example.test')
+    eid = event(db, owner, 4)
+    client = login(app, 'face@example.test')
+    home = client.get('/')
+    assert home.status_code == 200
+    assert 'avatar-fallback' in home.text
+    assert 'FA' in home.text or 'face' in home.text.lower()
+    image = Image.new('RGB', (400, 300), (32, 102, 250))
+    raw = BytesIO()
+    image.save(raw, format='JPEG')
+    payload = raw.getvalue()
+    uploaded = client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(payload), 'photo.jpg')},
+        content_type='multipart/form-data',
+    )
+    assert uploaded.status_code == 302
+    row = db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()
+    assert row['avatar_path'] and row['avatar_path'].startswith(f'a{member}-')
+    stored = P(app.config['UPLOAD_DIR']) / 'avatars' / row['avatar_path']
+    assert stored.is_file()
+    media = app.test_client().get(f"/media/avatars/{row['avatar_path']}")
+    assert media.status_code == 200 and media.mimetype == 'image/webp'
+    assert 'avatar-fallback' not in client.get('/').text
+    assert f"/media/avatars/{row['avatar_path']}" in client.get('/account').text
+    second = Image.new('RGB', (200, 200), (196, 75, 122))
+    raw2 = BytesIO()
+    second.save(raw2, format='PNG')
+    assert client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(raw2.getvalue()), 'other.png')},
+        content_type='multipart/form-data',
+    ).status_code == 302
+    updated = db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path']
+    assert updated != row['avatar_path']
+    assert not stored.exists()
+    assert client.post('/account/avatar', data={'remove': '1'}).status_code == 302
+    assert db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path'] is None
+    too_big = client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(b'GIF89a' + b'x' * 100), 'x.gif')},
+        content_type='multipart/form-data',
+    )
+    assert too_big.status_code == 400
+    # admin can remove another member's photo
+    user(db, 'boss@example.test', ('member', 'admin'), interests=False)
+    client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(payload), 'photo.jpg')},
+        content_type='multipart/form-data',
+    )
+    path = db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path']
+    office = login(app, 'boss@example.test')
+    assert office.post(f'/admin/users/{member}/avatar').status_code == 302
+    assert db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path'] is None
+    assert not (P(app.config['UPLOAD_DIR']) / 'avatars' / path).exists()
+    # reviews and public organizer pages render an avatar
+    db.execute("UPDATE events SET starts_at=now()-interval '3 hours', ends_at=now()-interval '1 hour' WHERE id=%s", (eid,))
+    db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (member, eid))
+    assert client.post(f'/activities/{eid}/avis', data={'rating': '5', 'comment': 'Super accueil.'}).status_code == 302
+    detail = app.test_client().get(f'/activities/{eid}')
+    assert 'avatar' in detail.text
+    public = app.test_client().get(f'/organisateurs/{owner}')
+    assert public.status_code == 200 and 'avatar' in public.text

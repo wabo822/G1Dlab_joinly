@@ -26,7 +26,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
-from app import covers, notify
+from app import avatars, covers, notify
 from app.charts import line_chart
 from app import dashboards
 from app.posters import render_poster
@@ -43,7 +43,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
 
 
 def _env_cutoff():
@@ -109,14 +109,14 @@ def create_app(config=None):
         g.impersonating = False
         token = session.get('auth_token')
         if token:
-            g.user = query('''SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at FROM users u
+            g.user = query('''SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at, u.avatar_path FROM users u
                 JOIN web_sessions s ON s.user_id=u.id
                 WHERE s.token_hash=%s AND s.expires_at>now() AND u.status='active' ''', (digest(token),), True)
             if g.user:
                 g.roles = {r['name'] for r in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (g.user['id'],))}
                 viewed = session.get('view_as')
                 if viewed and 'admin' in g.roles:
-                    target = query("SELECT id, email, display_name, status, email_verified_at FROM users WHERE id=%s AND status='active'", (int(viewed),), True)
+                    target = query("SELECT id, email, display_name, status, email_verified_at, avatar_path FROM users WHERE id=%s AND status='active'", (int(viewed),), True)
                     if target and target['id'] != g.user['id']:
                         g.impersonator = g.user
                         g.user = target
@@ -335,6 +335,9 @@ def create_app(config=None):
             return max(0, int(row['booking_cutoff_minutes']))
         return max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0))
 
+    app.jinja_env.globals['avatar_initials'] = avatars.initials
+    app.jinja_env.globals['avatar_color'] = avatars.color
+
     @app.context_processor
     def context():
         base = public_base()
@@ -351,11 +354,13 @@ def create_app(config=None):
             )['n'] if getattr(g, 'user', None) else 0,
             'policy_labels': POLICY_LABELS,
             'refund_preview': refund_cents,
+            'avatar_initials': avatars.initials,
+            'avatar_color': avatars.color,
             'google_enabled': bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET')),
             'settings': query('SELECT * FROM site_settings WHERE id=1', one=True),
         }
 
-    event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
+    event_select = '''SELECT e.*, u.display_name AS organizer, u.avatar_path AS organizer_avatar_path, c.name AS category, c.icon AS category_icon,
         e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available,
         (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_avg,
         (SELECT count(*) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_count
@@ -535,7 +540,7 @@ def create_app(config=None):
             event['view_count'] += 1
         booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True) if g.user else None
         reviews = query(
-            '''SELECT rv.*, u.display_name FROM reviews rv JOIN users u ON u.id=rv.author_id
+            '''SELECT rv.*, u.display_name, u.avatar_path FROM reviews rv JOIN users u ON u.id=rv.author_id
                WHERE rv.event_id=%s AND (NOT rv.hidden OR rv.author_id=%s)
                ORDER BY rv.created_at DESC''',
             (event_id, g.user['id'] if g.user else 0),
@@ -652,7 +657,7 @@ def create_app(config=None):
     @app.get('/organisateurs/<int:user_id>')
     def organizer_public(user_id):
         person = query(
-            '''SELECT u.id, u.display_name,
+            '''SELECT u.id, u.display_name, u.avatar_path,
                       (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers,
                       (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv
                          JOIN events e ON e.id=rv.event_id
@@ -920,7 +925,7 @@ def create_app(config=None):
         )
         covers.decorate(favorites)
         followed = query(
-            '''SELECT u.id, u.display_name,
+            '''SELECT u.id, u.display_name, u.avatar_path,
                       (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers
                FROM organizer_follows mine
                JOIN users u ON u.id=mine.organizer_id
@@ -933,6 +938,23 @@ def create_app(config=None):
             followed=followed, selected=selected, interest_minimum=minimum,
             categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
         )
+
+    @app.post('/account/avatar')
+    @require()
+    def account_avatar():
+        if request.form.get('remove'):
+            previous = g.user.get('avatar_path')
+            db().execute('UPDATE users SET avatar_path=NULL WHERE id=%s', (g.user['id'],))
+            avatars.delete_avatar(app, previous)
+            flash('Photo de profil retirée.', 'success')
+            return redirect(url_for('account'))
+        uploaded = request.files.get('avatar') if request.files else None
+        if not uploaded or not uploaded.filename:
+            raise ValueError('Choisissez une image (JPEG, PNG ou WebP, 2 Mo maximum).')
+        name = avatars.save_avatar(app, g.user['id'], uploaded, g.user.get('avatar_path'))
+        db().execute('UPDATE users SET avatar_path=%s WHERE id=%s', (name, g.user['id']))
+        flash('Photo de profil mise à jour.', 'success')
+        return redirect(url_for('account'))
 
     @app.post('/account/security')
     @require()
@@ -1221,7 +1243,7 @@ def create_app(config=None):
         if not event:
             abort(404)
         people = query(
-            '''SELECT u.display_name, r.reserved_at, t.checked_in_at
+            '''SELECT u.id, u.display_name, u.avatar_path, r.reserved_at, t.checked_in_at
                FROM reservations r JOIN users u ON u.id=r.member_id
                LEFT JOIN tickets t ON t.reservation_id=r.id
                WHERE r.event_id=%s AND r.status='confirmed' ORDER BY r.reserved_at''',
@@ -1459,6 +1481,16 @@ def create_app(config=None):
             abort(404)
         return send_from_directory(directory, filename, mimetype='image/webp', max_age=86400)
 
+    @app.get('/media/avatars/<filename>')
+    def media_avatar(filename):
+        if not avatars.AVATAR_RE.fullmatch(filename):
+            abort(404)
+        directory = avatars.avatar_dir(app)
+        path = (directory / filename).resolve()
+        if path.parent != directory or not path.is_file():
+            abort(404)
+        return send_from_directory(directory, filename, mimetype='image/webp', max_age=86400)
+
     @app.get('/admin/couvertures')
     @require('admin')
     def admin_covers():
@@ -1488,7 +1520,7 @@ def create_app(config=None):
     def admin():
         days = dashboards.period_days(request.args)
         payload = dashboards.admin_payload(query, days)
-        return render_template('admin.html', users=query('''SELECT u.id,u.email,u.display_name,u.status,
+        return render_template('admin.html', users=query('''SELECT u.id,u.email,u.display_name,u.status,u.avatar_path,
             ARRAY(SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=u.id) AS roles
             FROM users u ORDER BY u.id'''), faqs=query('SELECT * FROM faqs ORDER BY sort_order,id'),
             pages=query('SELECT * FROM legal_pages ORDER BY kind,version DESC'), messages=query('SELECT * FROM contact_requests ORDER BY created_at DESC'),
@@ -1590,6 +1622,17 @@ def create_app(config=None):
             db().execute('DELETE FROM web_sessions WHERE user_id=%s', (user_id,))
         flash('Compte mis à jour ; ses sessions ont été révoquées.', 'success')
         return redirect(url_for('admin'))
+
+    @app.post('/admin/users/<int:user_id>/avatar')
+    @require('admin')
+    def admin_remove_avatar(user_id):
+        person = query('SELECT id, avatar_path FROM users WHERE id=%s', (user_id,), True)
+        if not person:
+            abort(404)
+        db().execute('UPDATE users SET avatar_path=NULL WHERE id=%s', (user_id,))
+        avatars.delete_avatar(app, person['avatar_path'])
+        flash('Photo de profil retirée.', 'success')
+        return redirect(url_for('admin_user_detail', user_id=user_id))
 
     @app.post('/admin/faq')
     @require('admin')

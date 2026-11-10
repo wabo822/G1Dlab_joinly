@@ -1177,3 +1177,38 @@ hr {
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
 }
+
+.avatar {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  object-fit:cover;
+  flex-shrink:0;
+  vertical-align:middle;
+}
+.avatar-sm { width:36px; height:36px; font-size:.78rem; }
+.avatar-md { width:64px; height:64px; font-size:1.2rem; }
+.avatar-lg { width:96px; height:96px; font-size:1.7rem; }
+.avatar-fallback {
+  color:#fff;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:.02em;
+}
+.avatar-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.nav-account {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.avatar-form {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-bottom:18px;
+}
