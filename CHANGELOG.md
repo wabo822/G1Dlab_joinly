@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 2026-11-10 — Cartes du classement
+
+Sur la couverture, le rang n’est plus une barre colorée qui recouvre la catégorie. C’est un petit badge rond en haut à gauche (or, argent, bronze pour les trois premiers, fond neutre ensuite). La catégorie est une pastille en haut à droite. La date et l’heure tiennent dans un bloc lisible en bas à gauche. Les formes décoratives semi-transparentes sont masquées dès qu’une photo de couverture est présente ; l’attribution automatique des photos ne change pas. Même composant sur l’accueil, l’exploration, les recommandations et les pages organisateur.
+
+### Fichiers
+
+- `app/templates/_cards.html`, `app/static/app.css`, `tests/test_app.py`, `CHANGELOG.md`
+
+
 ## 2026-11-09 — Photos Unsplash
 
 `scripts/fetch_unsplash_covers.py` lit `UNSPLASH_ACCESS_KEY` dans l’environnement (la clé n’est pas versionnée). Il cherche 13 photos paysage par catégorie, déclenche `download_location` une fois par photo, et reste en dessous de 50 requêtes par heure : il attend la fenêtre suivante plutôt que de dépasser le plafond. La fiche d’une activité montre « Photo : nom sur Unsplash » avec les liens `utm_source=joinly_isep&utm_medium=referral`. Les crédits sont dans `docs/image-credits.md` et `app/static/covers/credits.json`.

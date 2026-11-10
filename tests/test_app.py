@@ -531,9 +531,11 @@ def test_ranking_uses_heat_and_shows_badges(app, db):
     page = app.test_client().get('/classement').text
     assert page.index('Populaire') < page.index('Consultée') < page.index('Calme')
     assert 'rank-badge rank-1' in page and 'rank-badge rank-2' in page and 'rank-badge rank-3' in page
+    assert 'art-category' in page and 'art-when' in page and 'art-date' in page
     home = app.test_client().get('/').text
     section = home.split('id="classement"', 1)[1]
     assert 'Populaire' in section and 'rank-badge rank-1' in section
+    assert 'art-category' in section and 'art-when' in section
 
 
 def test_view_counter_on_published_detail(app, db):
