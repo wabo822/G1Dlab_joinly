@@ -1212,3 +1212,15 @@ hr {
   gap:12px;
   margin-bottom:18px;
 }
+
+.confirm-recap dt {
+  font-size:.78rem;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#5747a5;
+  margin-top:12px;
+}
+.confirm-recap dd {
+  margin:2px 0 0;
+  font-weight:700;
+}

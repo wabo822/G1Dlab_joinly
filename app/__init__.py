@@ -974,9 +974,34 @@ def create_app(config=None):
         flash('Identifiants mis à jour. Connectez-vous à nouveau.', 'success')
         return redirect(url_for('login'))
 
+    @app.get('/activities/<int:event_id>/reserver')
+    @require()
+    def reserve_confirm(event_id):
+        event = query(event_select + ' WHERE e.id=%s', (event_id,), True)
+        if not event or (event['status'] == 'draft' and event['organizer_id'] != g.user['id'] and 'admin' not in g.roles):
+            abort(404)
+        booking = query(
+            "SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'",
+            (event_id, g.user['id']), True,
+        )
+        messages = {
+            'finished': 'Cette activité est terminée.',
+            'cutoff': 'Les inscriptions sont closes.',
+            'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+            'cancelled': 'Cette activité est annulée.',
+            'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+        }
+        reason_code = booking_block(event, cutoff_minutes=cutoff_minutes(), available=event['available'])
+        return render_template(
+            'confirm.html', event=event, booking=booking,
+            reservable=not reason_code, reason=messages.get(reason_code, ''),
+        )
+
     @app.post('/activities/<int:event_id>/reserve')
     @require()
     def reserve(event_id):
+        if request.form.get('confirm') != '1' or request.form.get('acknowledged') != '1':
+            return redirect(url_for('reserve_confirm', event_id=event_id))
         with db().transaction():
             event = query('SELECT * FROM events WHERE id=%s FOR UPDATE', (event_id,), True)
             if not event:
@@ -1019,8 +1044,7 @@ def create_app(config=None):
             abort(404)
         if event['price_cents'] <= 0:
             return redirect(url_for('detail', event_id=event_id))
-        booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True)
-        return render_template('payment.html', event=event, booking=booking)
+        return redirect(url_for('reserve_confirm', event_id=event_id))
 
     @app.post('/reservations/<int:booking_id>/cancel')
     @require()

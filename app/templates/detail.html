@@ -89,14 +89,11 @@
 {% elif event.available <= 0 %}
 <p class="notice">Cette activité est complète.</p>
 {% elif g.user and event.price_cents %}
-<a class="button wide" href="{{ url_for('simulated_payment', event_id=event.id) }}">Continuer · {{ event.price_cents|pricefr }}</a>
+<a class="button wide" href="{{ url_for('reserve_confirm', event_id=event.id) }}">Réserver · {{ event.price_cents|pricefr }}</a>
 <p class="notice">Paiement simulé — projet étudiant. Aucune carte bancaire n’est demandée.</p>
 {% elif g.user %}
-<form method="post" action="{{ url_for('reserve',event_id=event.id) }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<button class="wide">Réserver ma place</button>
-</form>
-<p class="muted">Annulation possible avant le début.</p>
+<a class="button wide" href="{{ url_for('reserve_confirm', event_id=event.id) }}">Réserver</a>
+<p class="muted">Annulation possible avant le début. Un récapitulatif vous sera présenté avant confirmation.</p>
 {% else %}
 <a class="button wide" href="{{ url_for('login') }}">Se connecter pour participer</a>
 {% endif %}

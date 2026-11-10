@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Confirmer la réservation — {{ event.title }} — Joinly{% endblock %}
+{% block description %}Vérifiez les informations avant de confirmer votre inscription à {{ event.title }}.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section narrow">
+<a href="{{ url_for('detail', event_id=event.id) }}">← {{ event.title }}</a>
+<p class="eyebrow">CONFIRMATION</p>
+<h1>Vérifiez votre inscription.</h1>
+<div class="panel stack">
+{% if event.price_cents %}
+<p class="notice">Paiement simulé — projet étudiant. Aucun montant n’est débité et aucune carte bancaire n’est demandée.</p>
+{% endif %}
+<h2>{{ event.title }}</h2>
+<dl class="confirm-recap">
+<dt>Date</dt>
+<dd>{{ event.starts_at|datefr }} — {{ event.ends_at|timefr }}</dd>
+<dt>Lieu</dt>
+<dd>{{ event.location }}</dd>
+<dt>Organisateur</dt>
+<dd>{{ event.organizer }}</dd>
+<dt>Tarif</dt>
+<dd>{{ event.price_cents|pricefr }}</dd>
+<dt>Places restantes</dt>
+<dd>{{ event.available if event.available > 0 else 0 }} / {{ event.capacity }}</dd>
+<dt>Annulation</dt>
+<dd>{{ policy_labels.get(event.cancellation_policy, '') }}{% if event.price_cents %} Remboursement simulé si vous annulez maintenant : {{ refund_preview(event)|pricefr }}.{% endif %}</dd>
+<dt>Participant</dt>
+<dd>{{ g.user.display_name }} · {{ g.user.email }}</dd>
+</dl>
+{% if not reservable %}
+<p class="notice error">{{ reason }}</p>
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+{% elif booking %}
+<p class="notice success">Votre place est déjà réservée.</p>
+<a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
+{% else %}
+<form method="post" action="{{ url_for('reserve', event_id=event.id) }}" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="confirm" value="1">
+{% if event.price_cents %}
+<input type="hidden" name="payment_simulated" value="1">
+{% endif %}
+<label class="check">
+<input type="checkbox" name="acknowledged" value="1" required>
+J’ai vérifié ces informations
+</label>
+<div class="actions">
+<button>{% if event.price_cents %}Confirmer la réservation{% else %}Confirmer la réservation{% endif %}</button>
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+</div>
+</form>
+{% endif %}
+</div>
+</section>
+{% endblock %}
