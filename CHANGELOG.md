@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 2026-11-10 — Carte des activités
+
+La politique de référent passe de `same-origin` à `strict-origin-when-cross-origin` (en-tête Flask et balise meta), pour que les tuiles reçoivent l’origine `https://isep.wangjiahan.com/`. Les tuiles officielles `tile.openstreetmap.org` renvoyaient sinon l’image « Access blocked / 403 » dans le navigateur. La carte utilise les tuiles d’OSM France (`{s}.tile.openstreetmap.fr/osmfr`), qui restent accessibles avec ou sans référent, avec l’attribution « © OpenStreetMap contributors © OSM France ». Les tuiles raster publiques CARTO exigent désormais une clé API et n’ont pas été adoptées. La CSP `img-src` autorise OSM France (et conserve OSM.org). La configuration nginx du site principal ne change pas : le `Referrer-Policy: no-referrer` existant ne concerne que l’aperçu privé, pas l’application.
+
+### Fichiers
+
+- `app/static/map.js`, `app/__init__.py`, `app/templates/base.html`, `tests/test_app.py`, `CHANGELOG.md`
+
+
 ## 2026-11-10 — Cartes du classement
 
 Sur la couverture, le rang n’est plus une barre colorée qui recouvre la catégorie. C’est un petit badge rond en haut à gauche (or, argent, bronze pour les trois premiers, fond neutre ensuite). La catégorie est une pastille en haut à droite. La date et l’heure tiennent dans un bloc lisible en bas à gauche. Les formes décoratives semi-transparentes sont masquées dès qu’une photo de couverture est présente ; l’attribution automatique des photos ne change pas. Même composant sur l’accueil, l’exploration, les recommandations et les pages organisateur.
