@@ -26,8 +26,9 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
-from app import covers, notify
+from app import avatars, covers, notify
 from app.charts import line_chart
+from app import dashboards
 from app.posters import render_poster
 from app.tickets import issue_ticket, payload_for, qr_png
 
@@ -42,7 +43,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
 
 
 def _env_cutoff():
@@ -108,14 +109,14 @@ def create_app(config=None):
         g.impersonating = False
         token = session.get('auth_token')
         if token:
-            g.user = query('''SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at FROM users u
+            g.user = query('''SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at, u.avatar_path FROM users u
                 JOIN web_sessions s ON s.user_id=u.id
                 WHERE s.token_hash=%s AND s.expires_at>now() AND u.status='active' ''', (digest(token),), True)
             if g.user:
                 g.roles = {r['name'] for r in query('SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=%s', (g.user['id'],))}
                 viewed = session.get('view_as')
                 if viewed and 'admin' in g.roles:
-                    target = query("SELECT id, email, display_name, status, email_verified_at FROM users WHERE id=%s AND status='active'", (int(viewed),), True)
+                    target = query("SELECT id, email, display_name, status, email_verified_at, avatar_path FROM users WHERE id=%s AND status='active'", (int(viewed),), True)
                     if target and target['id'] != g.user['id']:
                         g.impersonator = g.user
                         g.user = target
@@ -334,6 +335,9 @@ def create_app(config=None):
             return max(0, int(row['booking_cutoff_minutes']))
         return max(0, int(app.config.get('BOOKING_CUTOFF_MINUTES') or 0))
 
+    app.jinja_env.globals['avatar_initials'] = avatars.initials
+    app.jinja_env.globals['avatar_color'] = avatars.color
+
     @app.context_processor
     def context():
         base = public_base()
@@ -350,11 +354,13 @@ def create_app(config=None):
             )['n'] if getattr(g, 'user', None) else 0,
             'policy_labels': POLICY_LABELS,
             'refund_preview': refund_cents,
+            'avatar_initials': avatars.initials,
+            'avatar_color': avatars.color,
             'google_enabled': bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET')),
             'settings': query('SELECT * FROM site_settings WHERE id=1', one=True),
         }
 
-    event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
+    event_select = '''SELECT e.*, u.display_name AS organizer, u.avatar_path AS organizer_avatar_path, c.name AS category, c.icon AS category_icon,
         e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available,
         (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_avg,
         (SELECT count(*) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_count
@@ -534,7 +540,7 @@ def create_app(config=None):
             event['view_count'] += 1
         booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True) if g.user else None
         reviews = query(
-            '''SELECT rv.*, u.display_name FROM reviews rv JOIN users u ON u.id=rv.author_id
+            '''SELECT rv.*, u.display_name, u.avatar_path FROM reviews rv JOIN users u ON u.id=rv.author_id
                WHERE rv.event_id=%s AND (NOT rv.hidden OR rv.author_id=%s)
                ORDER BY rv.created_at DESC''',
             (event_id, g.user['id'] if g.user else 0),
@@ -651,7 +657,7 @@ def create_app(config=None):
     @app.get('/organisateurs/<int:user_id>')
     def organizer_public(user_id):
         person = query(
-            '''SELECT u.id, u.display_name,
+            '''SELECT u.id, u.display_name, u.avatar_path,
                       (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers,
                       (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv
                          JOIN events e ON e.id=rv.event_id
@@ -919,7 +925,7 @@ def create_app(config=None):
         )
         covers.decorate(favorites)
         followed = query(
-            '''SELECT u.id, u.display_name,
+            '''SELECT u.id, u.display_name, u.avatar_path,
                       (SELECT count(*) FROM organizer_follows f WHERE f.organizer_id=u.id) AS followers
                FROM organizer_follows mine
                JOIN users u ON u.id=mine.organizer_id
@@ -932,6 +938,23 @@ def create_app(config=None):
             followed=followed, selected=selected, interest_minimum=minimum,
             categories=query('SELECT id, name, icon FROM categories ORDER BY name'),
         )
+
+    @app.post('/account/avatar')
+    @require()
+    def account_avatar():
+        if request.form.get('remove'):
+            previous = g.user.get('avatar_path')
+            db().execute('UPDATE users SET avatar_path=NULL WHERE id=%s', (g.user['id'],))
+            avatars.delete_avatar(app, previous)
+            flash('Photo de profil retirée.', 'success')
+            return redirect(url_for('account'))
+        uploaded = request.files.get('avatar') if request.files else None
+        if not uploaded or not uploaded.filename:
+            raise ValueError('Choisissez une image (JPEG, PNG ou WebP, 2 Mo maximum).')
+        name = avatars.save_avatar(app, g.user['id'], uploaded, g.user.get('avatar_path'))
+        db().execute('UPDATE users SET avatar_path=%s WHERE id=%s', (name, g.user['id']))
+        flash('Photo de profil mise à jour.', 'success')
+        return redirect(url_for('account'))
 
     @app.post('/account/security')
     @require()
@@ -951,9 +974,34 @@ def create_app(config=None):
         flash('Identifiants mis à jour. Connectez-vous à nouveau.', 'success')
         return redirect(url_for('login'))
 
+    @app.get('/activities/<int:event_id>/reserver')
+    @require()
+    def reserve_confirm(event_id):
+        event = query(event_select + ' WHERE e.id=%s', (event_id,), True)
+        if not event or (event['status'] == 'draft' and event['organizer_id'] != g.user['id'] and 'admin' not in g.roles):
+            abort(404)
+        booking = query(
+            "SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'",
+            (event_id, g.user['id']), True,
+        )
+        messages = {
+            'finished': 'Cette activité est terminée.',
+            'cutoff': 'Les inscriptions sont closes.',
+            'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+            'cancelled': 'Cette activité est annulée.',
+            'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+        }
+        reason_code = booking_block(event, cutoff_minutes=cutoff_minutes(), available=event['available'])
+        return render_template(
+            'confirm.html', event=event, booking=booking,
+            reservable=not reason_code, reason=messages.get(reason_code, ''),
+        )
+
     @app.post('/activities/<int:event_id>/reserve')
     @require()
     def reserve(event_id):
+        if request.form.get('confirm') != '1' or request.form.get('acknowledged') != '1':
+            return redirect(url_for('reserve_confirm', event_id=event_id))
         with db().transaction():
             event = query('SELECT * FROM events WHERE id=%s FOR UPDATE', (event_id,), True)
             if not event:
@@ -996,8 +1044,7 @@ def create_app(config=None):
             abort(404)
         if event['price_cents'] <= 0:
             return redirect(url_for('detail', event_id=event_id))
-        booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True)
-        return render_template('payment.html', event=event, booking=booking)
+        return redirect(url_for('reserve_confirm', event_id=event_id))
 
     @app.post('/reservations/<int:booking_id>/cancel')
     @require()
@@ -1033,51 +1080,26 @@ def create_app(config=None):
         flash(f'Réservation annulée. Remboursement simulé : {euros}.', 'success')
         return redirect(url_for('account'))
 
+    def _organizer_board():
+        days = dashboards.period_days(request.args)
+        return render_template('dashboard.html', **dashboards.organizer_payload(query, g.user['id'], days))
+
     @app.get('/organizer')
     @require('organizer')
     def organizer():
-        return render_template('organizer.html', events=query(event_select + ' WHERE e.organizer_id=%s ORDER BY e.starts_at DESC', (g.user['id'],)))
+        return _organizer_board()
 
     @app.get('/organizer/tableau')
     @require('organizer')
     def organizer_dashboard():
-        owner = g.user['id']
-        stats = query(
-            '''SELECT COALESCE(SUM(e.view_count),0) AS views,
-                      COALESCE(SUM(e.capacity),0) AS capacity,
-                      COALESCE(SUM((SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')),0) AS filled,
-                      COALESCE(SUM(e.price_cents * (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')),0) AS gross,
-                      COALESCE(SUM((SELECT COALESCE(SUM(r.refund_cents),0) FROM reservations r WHERE r.event_id=e.id)),0) AS refunds
-               FROM events e WHERE e.organizer_id=%s AND e.status<>'cancelled' ''',
-            (owner,), True,
-        )
-        rating = query(
-            '''SELECT round(avg(rv.rating)::numeric, 1) AS avg, count(*) AS n
-               FROM reviews rv JOIN events e ON e.id=rv.event_id
-               WHERE e.organizer_id=%s AND NOT rv.hidden''',
-            (owner,), True,
-        )
-        top = query(
-            '''SELECT e.id, e.title, e.view_count,
-                      (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS booked
-               FROM events e WHERE e.organizer_id=%s
-               ORDER BY booked DESC, e.view_count DESC LIMIT 5''',
-            (owner,),
-        )
-        days = query(
-            '''SELECT to_char((r.reserved_at AT TIME ZONE 'Europe/Paris')::date, 'DD/MM') AS label, count(*) AS n
-               FROM reservations r JOIN events e ON e.id=r.event_id
-               WHERE e.organizer_id=%s AND r.status='confirmed' AND r.reserved_at > now() - interval '30 days'
-               GROUP BY 1 ORDER BY min(r.reserved_at)''',
-            (owner,),
-        )
-        capacity = int(stats['capacity'] or 0)
-        filled = int(stats['filled'] or 0)
+        return _organizer_board()
+
+    @app.get('/organizer/activites')
+    @require('organizer')
+    def organizer_activities():
         return render_template(
-            'dashboard.html', stats=stats, rating=rating, top=top,
-            fill_rate=round(100 * filled / capacity) if capacity else 0,
-            net=int(stats['gross'] or 0) - int(stats['refunds'] or 0),
-            chart=line_chart([row['n'] for row in days] or [0], [row['label'] for row in days] or ['—']),
+            'organizer_activities.html',
+            events=query(event_select + ' WHERE e.organizer_id=%s ORDER BY e.starts_at DESC', (g.user['id'],)),
         )
 
     def event_data():
@@ -1185,7 +1207,7 @@ def create_app(config=None):
                             f'/activities/{event_id}', email=person['email'],
                         )
             flash('Activité enregistrée.', 'success')
-            return redirect(url_for('organizer'))
+            return redirect(url_for('organizer_activities'))
         return render_template('event_form.html', event=event, categories=query('SELECT * FROM categories ORDER BY name'), library=covers.library_tree())
 
     def store_cover(event_id, previous):
@@ -1236,7 +1258,7 @@ def create_app(config=None):
                 f'/activities/{event_id}', dedupe_key=f'cancelled:{event_id}:{person["id"]}', email=person['email'],
             )
         flash('Activité et inscriptions annulées.', 'success')
-        return redirect(url_for('organizer'))
+        return redirect(url_for('organizer_activities'))
 
     @app.get('/organizer/<int:event_id>/participants')
     @require('organizer')
@@ -1245,7 +1267,7 @@ def create_app(config=None):
         if not event:
             abort(404)
         people = query(
-            '''SELECT u.display_name, r.reserved_at, t.checked_in_at
+            '''SELECT u.id, u.display_name, u.avatar_path, r.reserved_at, t.checked_in_at
                FROM reservations r JOIN users u ON u.id=r.member_id
                LEFT JOIN tickets t ON t.reservation_id=r.id
                WHERE r.event_id=%s AND r.status='confirmed' ORDER BY r.reserved_at''',
@@ -1483,6 +1505,16 @@ def create_app(config=None):
             abort(404)
         return send_from_directory(directory, filename, mimetype='image/webp', max_age=86400)
 
+    @app.get('/media/avatars/<filename>')
+    def media_avatar(filename):
+        if not avatars.AVATAR_RE.fullmatch(filename):
+            abort(404)
+        directory = avatars.avatar_dir(app)
+        path = (directory / filename).resolve()
+        if path.parent != directory or not path.is_file():
+            abort(404)
+        return send_from_directory(directory, filename, mimetype='image/webp', max_age=86400)
+
     @app.get('/admin/couvertures')
     @require('admin')
     def admin_covers():
@@ -1510,7 +1542,9 @@ def create_app(config=None):
     @app.get('/admin')
     @require('admin')
     def admin():
-        return render_template('admin.html', users=query('''SELECT u.id,u.email,u.display_name,u.status,
+        days = dashboards.period_days(request.args)
+        payload = dashboards.admin_payload(query, days)
+        return render_template('admin.html', users=query('''SELECT u.id,u.email,u.display_name,u.status,u.avatar_path,
             ARRAY(SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=u.id) AS roles
             FROM users u ORDER BY u.id'''), faqs=query('SELECT * FROM faqs ORDER BY sort_order,id'),
             pages=query('SELECT * FROM legal_pages ORDER BY kind,version DESC'), messages=query('SELECT * FROM contact_requests ORDER BY created_at DESC'),
@@ -1523,22 +1557,7 @@ def create_app(config=None):
             refundable=query('''SELECT r.id, u.display_name, e.title, e.price_cents, r.refund_cents, r.refund_status
                 FROM reservations r JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id
                 WHERE e.price_cents > 0 ORDER BY r.reserved_at DESC LIMIT 20'''),
-            kpis=query('''SELECT
-                (SELECT count(*) FROM users) AS users,
-                (SELECT count(*) FROM events WHERE status='published' AND ends_at>now()) AS active_events,
-                (SELECT count(*) FROM reservations WHERE status='confirmed') AS reservations,
-                (SELECT COALESCE(SUM(price_cents),0) FROM (
-                    SELECT e.price_cents * (SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS price_cents FROM events e
-                ) s) AS revenue,
-                (SELECT round(avg(rating)::numeric,1) FROM reviews WHERE NOT hidden) AS rating,
-                (SELECT count(*) FROM contact_requests WHERE NOT resolved) AS pending''', one=True),
-            signup_chart=line_chart(
-                [row['n'] for row in query('''SELECT
-                    (SELECT count(*) FROM users u WHERE u.created_at::date = d::date) AS n,
-                    to_char(d::date, 'DD/MM') AS label
-                    FROM generate_series(current_date - 13, current_date, interval '1 day') AS d''')],
-                [row['label'] for row in query('''SELECT to_char(d::date, 'DD/MM') AS label
-                    FROM generate_series(current_date - 13, current_date, interval '1 day') AS d''')]))
+            **payload)
 
     @app.post('/admin/events/<int:event_id>/price')
     @require('admin')
@@ -1627,6 +1646,17 @@ def create_app(config=None):
             db().execute('DELETE FROM web_sessions WHERE user_id=%s', (user_id,))
         flash('Compte mis à jour ; ses sessions ont été révoquées.', 'success')
         return redirect(url_for('admin'))
+
+    @app.post('/admin/users/<int:user_id>/avatar')
+    @require('admin')
+    def admin_remove_avatar(user_id):
+        person = query('SELECT id, avatar_path FROM users WHERE id=%s', (user_id,), True)
+        if not person:
+            abort(404)
+        db().execute('UPDATE users SET avatar_path=NULL WHERE id=%s', (user_id,))
+        avatars.delete_avatar(app, person['avatar_path'])
+        flash('Photo de profil retirée.', 'success')
+        return redirect(url_for('admin_user_detail', user_id=user_id))
 
     @app.post('/admin/faq')
     @require('admin')

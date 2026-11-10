@@ -1,5 +1,6 @@
 import hashlib
 import re
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from threading import Barrier
@@ -12,6 +13,10 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app import create_app
 
 PASSWORD = 'A sufficiently long test password'
+
+
+CONFIRM = {'confirm': '1', 'acknowledged': '1'}
+CONFIRM_PAID = {'confirm': '1', 'acknowledged': '1', 'payment_simulated': '1'}
 
 @pytest.fixture()
 def app():
@@ -170,13 +175,13 @@ def test_booking_cancel_rebook_and_ownership(app, db):
     other = user(db,'other@example.test')
     eid = event(db,uid,2)
     client = login(app)
-    assert client.post(f'/activities/{eid}/reserve').status_code == 302
-    assert client.post(f'/activities/{eid}/reserve').status_code == 409
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 409
     bid = db.execute('SELECT id FROM reservations WHERE member_id=%s',(uid,)).fetchone()['id']
     assert login(app,'other@example.test').post(f'/reservations/{bid}/cancel').status_code == 404
     assert client.post(f'/reservations/{bid}/cancel').status_code == 302
     assert client.post(f'/reservations/{bid}/cancel').status_code == 302
-    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
     assert db.execute("SELECT count(*) AS n FROM reservations WHERE status='confirmed'").fetchone()['n'] == 1
 
 
@@ -188,7 +193,7 @@ def test_last_place_concurrency(app, db):
     barrier = Barrier(2)
     def reserve(client):
         barrier.wait(timeout=5)
-        return client.post(f'/activities/{eid}/reserve').status_code
+        return client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(reserve, clients))
     assert sorted(results) == [302,400]
@@ -204,7 +209,7 @@ def test_organizer_permissions_and_lifecycle(app, db):
     assert stranger.get(f'/organizer/{eid}/participants').status_code == 404
     assert stranger.post(f'/organizer/{eid}/cancel').status_code == 404
     assert stranger.post(f'/organizer/{eid}/edit',data=event_form(db,eid)).status_code == 404
-    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
     assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,location='Lyon')).status_code == 400
     assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,capacity='0')).status_code == 400
     assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,title='Updated')).status_code == 302
@@ -212,7 +217,7 @@ def test_organizer_permissions_and_lifecycle(app, db):
     assert 'member@example.test' not in html
     assert client.post(f'/organizer/{eid}/cancel').status_code == 302
     assert db.execute('SELECT status FROM reservations WHERE event_id=%s',(eid,)).fetchone()['status'] == 'cancelled'
-    assert stranger.post(f'/activities/{eid}/reserve').status_code == 400
+    assert stranger.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 400
 
 
 def test_event_creation_and_draft_publication(app, db):
@@ -234,8 +239,8 @@ def test_started_events_and_capacity_reduction(app, db):
     user(db,'second@example.test')
     eid = event(db,owner,2)
     client = login(app)
-    client.post(f'/activities/{eid}/reserve')
-    login(app,'second@example.test').post(f'/activities/{eid}/reserve')
+    client.post(f'/activities/{eid}/reserve', data=CONFIRM)
+    login(app,'second@example.test').post(f'/activities/{eid}/reserve', data=CONFIRM)
     assert client.post(f'/organizer/{eid}/edit',data=event_form(db,eid,capacity='1')).status_code == 400
     db.execute("UPDATE events SET starts_at=now()-interval '1 hour' WHERE id=%s",(eid,))
     bid = db.execute('SELECT id FROM reservations WHERE member_id=%s',(owner,)).fetchone()['id']
@@ -303,11 +308,14 @@ def test_concurrent_event_cancel_and_reserve(app, db):
     member = login(app,'second@example.test')
     barrier = Barrier(2)
     def action(pair):
-        client, path = pair
+        client, path, data = pair
         barrier.wait(timeout=5)
-        return client.post(path).status_code
+        return client.post(path, data=data).status_code
     with ThreadPoolExecutor(max_workers=2) as executor:
-        result = list(executor.map(action, [(organizer,f'/organizer/{eid}/cancel'), (member,f'/activities/{eid}/reserve')]))
+        result = list(executor.map(action, [
+            (organizer, f'/organizer/{eid}/cancel', {}),
+            (member, f'/activities/{eid}/reserve', CONFIRM),
+        ]))
     assert result[0] == 302 and result[1] in (302,400)
     assert db.execute('SELECT status FROM events WHERE id=%s',(eid,)).fetchone()['status'] == 'cancelled'
     assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'",(eid,)).fetchone()['n'] == 0
@@ -564,21 +572,29 @@ def test_paid_activity_simulated_payment_and_admin_price(app, db):
     assert '12,50 €' in public.text
     assert '12,50 €' in app.test_client().get('/activities').text
     payer = login(app, 'payer@example.test')
-    assert payer.post(f'/activities/{eid}/reserve').status_code == 400
+    skipped = payer.post(f'/activities/{eid}/reserve')
+    assert skipped.status_code == 302
+    assert skipped.headers['Location'].endswith(f'/activities/{eid}/reserver')
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (eid,)).fetchone()['n'] == 0
     payment = payer.get(f'/activities/{eid}/paiement')
-    assert payment.status_code == 200
-    assert 'Paiement simulé — projet étudiant' in payment.text
-    assert 'name="card"' not in payment.text and 'name="cvv"' not in payment.text and 'name="pan"' not in payment.text
-    assert payer.post(f'/activities/{eid}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert payment.status_code == 302
+    recap = payer.get(f'/activities/{eid}/reserver')
+    assert recap.status_code == 200
+    assert 'Paiement simulé — projet étudiant' in recap.text
+    assert 'name="card"' not in recap.text and 'name="cvv"' not in recap.text and 'name="pan"' not in recap.text
+    assert payer.post(f'/activities/{eid}/reserve', data={'confirm': '1', 'acknowledged': '1'}).status_code == 400
+    assert payer.post(f'/activities/{eid}/reserve', data=CONFIRM_PAID).status_code == 302
     assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (eid,)).fetchone()['n'] == 1
     free = event(db, owner, 5)
-    assert payer.post(f'/activities/{free}/reserve').status_code == 302
+    assert payer.post(f'/activities/{free}/reserve', data=CONFIRM).status_code == 302
     assert payer.get(f'/activities/{free}/paiement').status_code == 302
     admin = login(app, 'admin@example.test')
     assert admin.post(f'/admin/events/{free}/price', data={'price': '9'}).status_code == 302
     assert db.execute('SELECT price_cents FROM events WHERE id=%s', (free,)).fetchone()['price_cents'] == 900
     assert '9 €' in app.test_client().get(f'/activities/{free}').text
-    assert payer.get(f'/activities/{free}/paiement').status_code == 200
+    recap_priced = payer.get(f'/activities/{free}/paiement')
+    assert recap_priced.status_code == 302
+    assert recap_priced.headers['Location'].endswith(f'/activities/{free}/reserver')
 
 
 def test_trusted_proxy_https_forms_and_hosts(app):
@@ -618,7 +634,7 @@ def test_finished_activities_stay_visible_but_leave_the_lists(app, db):
     detail = public.get(f'/activities/{eid}')
     assert detail.status_code == 200 and 'Activité terminée' in detail.text and 'Annulée' not in detail.text
     guest = login(app, 'guest@example.test')
-    assert guest.post(f'/activities/{eid}/reserve').status_code == 400
+    assert guest.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 400
     account = guest.get('/account').text
     assert 'Historique' in account and 'Sortie finie' in account
     organizer = login(app, 'owner@example.test')
@@ -651,11 +667,11 @@ def test_booking_cutoff_closes_before_the_start(app, db):
     app.config['BOOKING_CUTOFF_MINUTES'] = 180
     db.execute('UPDATE site_settings SET booking_cutoff_minutes=180')
     guest = login(app, 'guest@example.test')
-    assert guest.post(f'/activities/{eid}/reserve').status_code == 400
+    assert guest.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 400
     assert 'Inscriptions closes' in guest.get(f'/activities/{eid}').text
     app.config['BOOKING_CUTOFF_MINUTES'] = 0
     db.execute('UPDATE site_settings SET booking_cutoff_minutes=0')
-    assert guest.post(f'/activities/{eid}/reserve').status_code == 302
+    assert guest.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
 
 
 def test_activity_search_filters_sort_and_pagination(app, db):
@@ -716,7 +732,7 @@ def test_reviews_are_unique_editable_and_moderated(app, db):
     db.execute("UPDATE events SET title='Notée haut' WHERE id=%s", (eid,))
     db.execute("UPDATE events SET title='Notée bas' WHERE id=%s", (other,))
     guest = login(app, 'guest@example.test')
-    assert guest.post(f'/activities/{eid}/reserve').status_code == 302
+    assert guest.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
     assert guest.post(f'/activities/{eid}/avis', data={'rating': '5', 'comment': 'Trop tôt'}).status_code == 400
     db.execute("UPDATE events SET starts_at=now()-interval '3 hours', ends_at=now()-interval '1 hour' WHERE id=%s", (eid,))
     db.execute("UPDATE events SET starts_at=now()-interval '5 hours', ends_at=now()-interval '4 hours' WHERE id=%s", (other,))
@@ -873,7 +889,7 @@ def test_notifications_mail_and_reminders(app, db, monkeypatch):
     eid = event(db, owner, 4)
     db.execute('INSERT INTO organizer_follows(follower_id, organizer_id) VALUES (%s, %s)', (fan, owner))
     client = login(app, 'guest@example.test')
-    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
     note = db.execute(
         "SELECT kind FROM notifications WHERE user_id=%s AND kind='booking_confirmed'", (guest,),
     ).fetchone()
@@ -944,7 +960,7 @@ def test_notifications_mail_and_reminders(app, db, monkeypatch):
     monkeypatch.setenv('MAIL_FROM', 'noreply@wangjiahan.com')
     monkeypatch.setattr('app.notify.smtplib.SMTP', Boom)
     other = event(db, owner, 4)
-    assert client.post(f'/activities/{other}/reserve').status_code == 302
+    assert client.post(f'/activities/{other}/reserve', data=CONFIRM).status_code == 302
 
 
 def test_tickets_check_in_once_and_reject_the_wrong_organizer(app, db):
@@ -953,7 +969,7 @@ def test_tickets_check_in_once_and_reject_the_wrong_organizer(app, db):
     guest = user(db, 'guest@example.test')
     eid = event(db, owner, 4)
     client = login(app, 'guest@example.test')
-    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
     ticket = db.execute(
         '''SELECT t.id, t.code, t.token FROM tickets t JOIN reservations r ON r.id=t.reservation_id
            WHERE r.member_id=%s AND r.event_id=%s''',
@@ -995,7 +1011,7 @@ def test_simulated_refunds_follow_the_cancellation_policy(app, db):
 
     flexible = priced('Flexible loin', 'flexible', 48)
     guest_client = login(app, 'guest@example.test')
-    assert guest_client.post(f'/activities/{flexible}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert guest_client.post(f'/activities/{flexible}/reserve', data=CONFIRM_PAID).status_code == 302
     page = guest_client.get('/account').text
     assert 'Remboursement simulé' in page and '20 €' in page
     booking = db.execute('SELECT id FROM reservations WHERE event_id=%s', (flexible,)).fetchone()['id']
@@ -1007,26 +1023,26 @@ def test_simulated_refunds_follow_the_cancellation_policy(app, db):
     ).fetchone()['body']
 
     late = priced('Flexible tard', 'flexible', 2)
-    assert guest_client.post(f'/activities/{late}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert guest_client.post(f'/activities/{late}/reserve', data=CONFIRM_PAID).status_code == 302
     late_id = db.execute('SELECT id FROM reservations WHERE event_id=%s', (late,)).fetchone()['id']
     assert guest_client.post(f'/reservations/{late_id}/cancel').status_code == 302
     assert db.execute('SELECT refund_cents FROM reservations WHERE id=%s', (late_id,)).fetchone()['refund_cents'] == 0
 
     half = priced('Modérée', 'moderate', 48)
-    assert guest_client.post(f'/activities/{half}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert guest_client.post(f'/activities/{half}/reserve', data=CONFIRM_PAID).status_code == 302
     half_id = db.execute('SELECT id FROM reservations WHERE event_id=%s', (half,)).fetchone()['id']
     assert guest_client.post(f'/reservations/{half_id}/cancel').status_code == 302
     assert db.execute('SELECT refund_cents FROM reservations WHERE id=%s', (half_id,)).fetchone()['refund_cents'] == 1000
 
     strict = priced('Stricte', 'strict', 96)
     organizer = login(app, 'owner@example.test')
-    assert guest_client.post(f'/activities/{strict}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert guest_client.post(f'/activities/{strict}/reserve', data=CONFIRM_PAID).status_code == 302
     assert organizer.post(f'/organizer/{strict}/cancel').status_code == 302
     assert db.execute(
         "SELECT refund_cents FROM reservations WHERE event_id=%s", (strict,)
     ).fetchone()['refund_cents'] == 2000
     manual = priced('Manuelle', 'strict', 96, cents=1500)
-    assert guest_client.post(f'/activities/{manual}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert guest_client.post(f'/activities/{manual}/reserve', data=CONFIRM_PAID).status_code == 302
     manual_id = db.execute('SELECT id FROM reservations WHERE event_id=%s', (manual,)).fetchone()['id']
     admin = login(app, 'admin@example.test')
     assert admin.post(f'/admin/reservations/{manual_id}/remboursement', data={'refund': '4'}).status_code == 400
@@ -1147,7 +1163,7 @@ def test_booking_email_lists_ticket_and_public_page_needs_no_login(app, db):
     guest = user(db, 'guest@example.test')
     eid = event(db, owner, 4)
     client = login(app, 'guest@example.test')
-    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM).status_code == 302
     ticket = db.execute(
         '''SELECT t.id, t.code, t.token FROM tickets t JOIN reservations r ON r.id=t.reservation_id
            WHERE r.event_id=%s AND r.member_id=%s''',
@@ -1207,7 +1223,7 @@ def test_booking_html_email_embeds_inline_qr(app, db, monkeypatch):
     eid = event(db, owner, 4)
     db.execute('UPDATE events SET price_cents=1500 WHERE id=%s', (eid,))
     client = login(app, 'mailer@example.test')
-    assert client.post(f'/activities/{eid}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    assert client.post(f'/activities/{eid}/reserve', data=CONFIRM_PAID).status_code == 302
     ticket = db.execute(
         '''SELECT t.code, t.token FROM tickets t JOIN reservations r ON r.id=t.reservation_id
            WHERE r.event_id=%s AND r.member_id=%s''',
@@ -1234,3 +1250,148 @@ def test_booking_html_email_embeds_inline_qr(app, db, monkeypatch):
     assert 'Paiement simulé' in html
     assert any('ticket-qr' in cid for cid in cids)
     assert png and png.startswith(b'\x89PNG')
+
+def test_organizer_landing_is_dashboard_and_list_has_its_own_page(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    eid = event(db, owner, 10)
+    db.execute("UPDATE events SET title='Atelier suivi', price_cents=1000, view_count=12 WHERE id=%s", (eid,))
+    for index in range(4):
+        member = user(db, f'board{index}@example.test')
+        db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (member, eid))
+    client = login(app, 'owner@example.test')
+    home = client.get('/organizer')
+    assert home.status_code == 200
+    assert 'Tableau de bord' in home.text
+    assert '12' in home.text and '40 %' in home.text and '40 €' in home.text
+    assert 'periode=7' in home.text and 'periode=90' in home.text
+    assert client.get('/organizer?periode=7').status_code == 200
+    listing = client.get('/organizer/activites')
+    assert listing.status_code == 200 and 'Atelier suivi' in listing.text
+    assert 'Créer une activité' in listing.text
+
+
+def test_admin_dashboard_has_period_kpis_and_keeps_moderation_forms(app, db):
+    user(db, 'boss@example.test', ('member', 'admin'), interests=False)
+    office = login(app, 'boss@example.test')
+    page = office.get('/admin')
+    assert page.status_code == 200
+    assert 'Nouveaux comptes' in page.text
+    assert '30 jours' in page.text
+    assert 'id="faq"' in page.text and 'id="legal"' in page.text and 'id="contact"' in page.text
+    assert office.get('/admin?periode=90').status_code == 200
+
+def test_avatar_upload_change_remove_and_initials_fallback(app, db, tmp_path):
+    from io import BytesIO
+    from pathlib import Path as P
+
+    from PIL import Image
+
+    app.config['UPLOAD_DIR'] = str(tmp_path)
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    member = user(db, 'face@example.test')
+    eid = event(db, owner, 4)
+    client = login(app, 'face@example.test')
+    home = client.get('/')
+    assert home.status_code == 200
+    assert 'avatar-fallback' in home.text
+    assert 'FA' in home.text or 'face' in home.text.lower()
+    image = Image.new('RGB', (400, 300), (32, 102, 250))
+    raw = BytesIO()
+    image.save(raw, format='JPEG')
+    payload = raw.getvalue()
+    uploaded = client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(payload), 'photo.jpg')},
+        content_type='multipart/form-data',
+    )
+    assert uploaded.status_code == 302
+    row = db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()
+    assert row['avatar_path'] and row['avatar_path'].startswith(f'a{member}-')
+    stored = P(app.config['UPLOAD_DIR']) / 'avatars' / row['avatar_path']
+    assert stored.is_file()
+    media = app.test_client().get(f"/media/avatars/{row['avatar_path']}")
+    assert media.status_code == 200 and media.mimetype == 'image/webp'
+    assert 'avatar-fallback' not in client.get('/').text
+    assert f"/media/avatars/{row['avatar_path']}" in client.get('/account').text
+    second = Image.new('RGB', (200, 200), (196, 75, 122))
+    raw2 = BytesIO()
+    second.save(raw2, format='PNG')
+    assert client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(raw2.getvalue()), 'other.png')},
+        content_type='multipart/form-data',
+    ).status_code == 302
+    updated = db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path']
+    assert updated != row['avatar_path']
+    assert not stored.exists()
+    assert client.post('/account/avatar', data={'remove': '1'}).status_code == 302
+    assert db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path'] is None
+    too_big = client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(b'GIF89a' + b'x' * 100), 'x.gif')},
+        content_type='multipart/form-data',
+    )
+    assert too_big.status_code == 400
+    # admin can remove another member's photo
+    user(db, 'boss@example.test', ('member', 'admin'), interests=False)
+    client.post(
+        '/account/avatar',
+        data={'avatar': (BytesIO(payload), 'photo.jpg')},
+        content_type='multipart/form-data',
+    )
+    path = db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path']
+    office = login(app, 'boss@example.test')
+    assert office.post(f'/admin/users/{member}/avatar').status_code == 302
+    assert db.execute('SELECT avatar_path FROM users WHERE id=%s', (member,)).fetchone()['avatar_path'] is None
+    assert not (P(app.config['UPLOAD_DIR']) / 'avatars' / path).exists()
+    # reviews and public organizer pages render an avatar
+    db.execute("UPDATE events SET starts_at=now()-interval '3 hours', ends_at=now()-interval '1 hour' WHERE id=%s", (eid,))
+    db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (member, eid))
+    assert client.post(f'/activities/{eid}/avis', data={'rating': '5', 'comment': 'Super accueil.'}).status_code == 302
+    detail = app.test_client().get(f'/activities/{eid}')
+    assert 'avatar' in detail.text
+    public = app.test_client().get(f'/organisateurs/{owner}')
+    assert public.status_code == 200 and 'avatar' in public.text
+
+def test_booking_requires_confirmation_checkbox_and_uses_one_paid_step(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    user(db, 'guest@example.test')
+    eid = event(db, owner, 4)
+    client = login(app, 'guest@example.test')
+    detail = client.get(f'/activities/{eid}')
+    assert detail.status_code == 200
+    assert f'/activities/{eid}/reserver' in detail.text
+    assert f'action="/activities/{eid}/reserve"' not in detail.text
+    skipped = client.post(f'/activities/{eid}/reserve')
+    assert skipped.status_code == 302
+    assert skipped.headers['Location'].endswith(f'/activities/{eid}/reserver')
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (eid,)).fetchone()['n'] == 0
+    recap = client.get(f'/activities/{eid}/reserver')
+    assert recap.status_code == 200
+    assert 'Balade' in recap.text and 'guest@example.test' in recap.text
+    assert 'J’ai vérifié ces informations' in recap.text
+    assert 'Confirmer la réservation' in recap.text and 'Retour' in recap.text
+    assert 'name="confirm"' in recap.text and 'name="acknowledged"' in recap.text
+    bare = client.post(f'/activities/{eid}/reserve', data={'confirm': '1'})
+    assert bare.status_code == 302
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (eid,)).fetchone()['n'] == 0
+    assert client.post(f'/activities/{eid}/reserve', data={'confirm': '1', 'acknowledged': '1'}).status_code == 302
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (eid,)).fetchone()['n'] == 1
+
+    paid = event(db, owner, 4)
+    db.execute('UPDATE events SET price_cents=1250, title=%s WHERE id=%s', ('Concert simulé', paid))
+    payment = client.get(f'/activities/{paid}/paiement')
+    assert payment.status_code == 302
+    assert payment.headers['Location'].endswith(f'/activities/{paid}/reserver')
+    recap_paid = client.get(f'/activities/{paid}/reserver')
+    assert recap_paid.status_code == 200
+    assert 'Paiement simulé — projet étudiant' in recap_paid.text
+    assert '12,50 €' in recap_paid.text
+    assert 'name="card"' not in recap_paid.text and 'name="cvv"' not in recap_paid.text
+    assert 'name="payment_simulated"' in recap_paid.text
+    assert client.post(f'/activities/{paid}/reserve', data={'confirm': '1', 'acknowledged': '1'}).status_code == 400
+    assert client.post(
+        f'/activities/{paid}/reserve',
+        data={'confirm': '1', 'acknowledged': '1', 'payment_simulated': '1'},
+    ).status_code == 302
+    assert db.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (paid,)).fetchone()['n'] == 1

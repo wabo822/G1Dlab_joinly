@@ -1,0 +1,7 @@
+{% macro avatar(user, size='sm') -%}
+{%- if user.avatar_path -%}
+<img class="avatar avatar-{{ size }}" src="{{ url_for('media_avatar', filename=user.avatar_path) }}" alt="" width="{{ 40 if size=='sm' else 64 if size=='md' else 96 }}" height="{{ 40 if size=='sm' else 64 if size=='md' else 96 }}">
+{%- else -%}
+<span class="avatar avatar-{{ size }} avatar-fallback" style="background:{{ avatar_color(user.id) }}" aria-hidden="true">{{ avatar_initials(user.display_name) }}</span>
+{%- endif -%}
+{%- endmacro %}

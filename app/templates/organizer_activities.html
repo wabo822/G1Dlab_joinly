@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Mes activités — Joinly{% endblock %}
+{% block description %}Créez, modifiez et suivez les inscriptions de vos activités Joinly.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section">
+<div class="section-head">
+<div>
+<p class="eyebrow">ESPACE ORGANISATEUR</p>
+<h1>Vos idées prennent vie.</h1>
+</div>
+<div class="actions">
+<a class="button secondary" href="{{ url_for('organizer') }}">Tableau de bord</a>
+<a class="button" href="{{ url_for('edit_event') }}">Créer une activité +</a>
+</div>
+</div>
+{% for e in events %}
+<article class="panel booking-row">
+<span class="badge badge-{{ e.status }}">{{ {'draft':'Brouillon','published':'Publié','cancelled':'Annulé'}[e.status] }}</span>
+<h2>
+<a href="{{ url_for('detail',event_id=e.id) }}">{{ e.title }}</a>
+</h2>
+<p>{{ e.starts_at|datefr }} · {{ e.location }} · {{ e.price_cents|pricefr }} · {{ e.capacity-e.available }} / {{ e.capacity }} inscrits</p>
+<div class="actions">
+<a href="{{ url_for('participants',event_id=e.id) }}">Voir les participants</a>
+{% if e.status != 'cancelled' and e.starts_at > now %}
+<a href="{{ url_for('edit_event',event_id=e.id) }}">Modifier</a>
+<form method="post" action="{{ url_for('cancel_event',event_id=e.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="danger small">Annuler l’activité et ses inscriptions</button>
+</form>
+{% endif %}
+</div>
+</article>
+{% else %}
+<div class="empty">
+<h2>Aucune activité pour le moment.</h2>
+<p>Enregistrez un brouillon ou publiez directement dans le catalogue. Indiquez 0 € pour une activité gratuite.</p>
+<a class="button" href="{{ url_for('edit_event') }}">Créer une activité</a>
+</div>
+{% endfor %}
+</section>
+{% endblock %}

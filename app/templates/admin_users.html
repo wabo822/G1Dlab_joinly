@@ -1,4 +1,5 @@
 {% extends 'admin_base.html' %}
+{% from '_avatar.html' import avatar %}
 {% block title %}Comptes — Administration{% endblock %}
 {% block admin %}
 <h1>Comptes</h1>
@@ -11,7 +12,7 @@
 <form method="post" action="{{ url_for('admin_users_bulk') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% for row in rows %}
-<p><label class="check"><input type="checkbox" name="ids" value="{{ row.id }}"> {{ row.display_name }} · {{ row.email }} · {{ row.status }}</label>
+<p class="avatar-row"><label class="check"><input type="checkbox" name="ids" value="{{ row.id }}"> {{ avatar(row) }} {{ row.display_name }} · {{ row.email }} · {{ row.status }}</label>
 <a href="{{ url_for('admin_user_detail', user_id=row.id) }}">Fiche</a></p>
 {% endfor %}
 <select name="action"><option value="activate">Activer</option><option value="ban">Bannir</option><option value="delete">Supprimer</option></select>

@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
+{% from '_avatar.html' import avatar %}
 <a class="skip" href="#main">Aller au contenu</a>
 <header>
 <nav class="container nav" aria-label="Navigation principale">
@@ -45,7 +46,7 @@
 <div class="actions">
 {% if g.user %}
 <a class="bell" href="{{ url_for('notifications') }}">Notifications{% if unread %}<span class="bell-count">{{ unread }}</span>{% endif %}</a>
-<a class="button secondary small" href="{{ url_for('account') }}">Mon espace</a>
+<a class="button secondary small nav-account" href="{{ url_for('account') }}">{{ avatar(g.user) }} <span>Mon espace</span></a>
 <form method="post" action="{{ url_for('logout') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <button class="textbutton">Déconnexion</button>

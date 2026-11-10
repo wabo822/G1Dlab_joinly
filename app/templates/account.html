@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from '_avatar.html' import avatar %}
 {% block title %}Mon espace — Joinly{% endblock %}
 {% block description %}Consultez vos inscriptions et mettez à jour votre profil Joinly.{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
@@ -55,7 +56,7 @@
 <h2>Organisateurs suivis</h2>
 {% for person in followed %}
 <article class="panel booking-row">
-<h3><a href="{{ url_for('organizer_public', user_id=person.id) }}">{{ person.display_name }}</a></h3>
+<h3 class="avatar-row">{{ avatar(person) }} <a href="{{ url_for('organizer_public', user_id=person.id) }}">{{ person.display_name }}</a></h3>
 <p class="muted">{{ person.followers }} abonné{{ 's' if person.followers != 1 else '' }}</p>
 </article>
 {% else %}
@@ -65,6 +66,23 @@
 <aside class="panel">
 <h2>Mon profil</h2>
 <p class="muted">{{ g.user.email }}</p>
+<div class="avatar-form">
+{{ avatar(g.user, 'lg') }}
+<form method="post" action="{{ url_for('account_avatar') }}" enctype="multipart/form-data" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Photo de profil (JPEG, PNG ou WebP, 2 Mo maximum)
+<input type="file" name="avatar" accept="image/jpeg,image/png,image/webp">
+</label>
+<button class="secondary small">Mettre à jour la photo</button>
+</form>
+{% if g.user.avatar_path %}
+<form method="post" action="{{ url_for('account_avatar') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="remove" value="1">
+<button class="textbutton">Retirer la photo</button>
+</form>
+{% endif %}
+</div>
 <form method="post" class="stack">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <label>Nom affiché<input name="display_name" maxlength="100" value="{{ g.user.display_name }}" required>
@@ -96,7 +114,7 @@
 </details>
 {% if 'organizer' in g.roles %}
 <hr>
-<a href="{{ url_for('organizer') }}">Gérer mes activités →</a>
+<a href="{{ url_for('organizer_activities') }}">Gérer mes activités →</a>
 {% else %}
 <hr>
 <form method="post" action="{{ url_for('request_organizer') }}" class="stack">
