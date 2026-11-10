@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Tableau de bord — Joinly{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block content %}
+<section class="container section">
+<p class="eyebrow">ORGANISATEUR</p>
+<h1>Tableau de bord.</h1>
+<div class="admin-grid">
+<article class="panel"><h2>Consultations</h2><p>{{ stats.views }}</p></article>
+<article class="panel"><h2>Taux de remplissage</h2><p>{{ fill_rate }} %</p></article>
+<article class="panel"><h2>Revenu simulé</h2><p>{{ net|pricefr }}</p></article>
+<article class="panel"><h2>Note moyenne</h2><p>{% if rating.n %}{{ rating.avg }} ★ · {{ rating.n }} avis{% else %}Pas encore d’avis{% endif %}</p></article>
+</div>
+<h2>Réservations confirmées</h2>
+{{ chart }}
+<h2>Activités les plus suivies</h2>
+{% for event in top %}
+<p><a href="{{ url_for('detail', event_id=event.id) }}">{{ event.title }}</a> — {{ event.booked }} inscrits · {{ event.view_count }} vues</p>
+{% else %}
+<p class="muted">Aucune activité.</p>
+{% endfor %}
+</section>
+{% endblock %}

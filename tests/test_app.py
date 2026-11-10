@@ -1056,3 +1056,21 @@ def test_share_poster_and_open_graph_use_the_cover(app, db):
     poster = app.test_client().get(f'/activities/{eid}/affiche.png')
     assert poster.status_code == 200 and poster.mimetype == 'image/png' and poster.data.startswith(b'\x89PNG')
     assert len(poster.data) > 1000
+
+
+def test_organizer_dashboard_sums_views_fill_and_revenue(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    eid = event(db, owner, 10)
+    db.execute("UPDATE events SET title='Atelier suivi', price_cents=1000, view_count=12 WHERE id=%s", (eid,))
+    for index in range(4):
+        member = user(db, f'dash{index}@example.test')
+        db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (member, eid))
+    db.execute(
+        "INSERT INTO reviews(event_id, author_id, rating, comment) VALUES (%s, %s, 4, 'Très bonne organisation.')",
+        (eid, owner),
+    )
+    page = login(app, 'owner@example.test').get('/organizer/tableau')
+    assert page.status_code == 200
+    assert '12' in page.text and '40 %' in page.text and '40 €' in page.text and '<svg' in page.text
+    assert 'Atelier suivi' in page.text
+    assert login(app, 'dash0@example.test').get('/organizer/tableau').status_code == 403
