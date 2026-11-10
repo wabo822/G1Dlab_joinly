@@ -21,6 +21,12 @@
 <label>Ville<input name="city" value="{{ event.city if event else '' }}" maxlength="80" placeholder="Paris">
 </label>
 <div class="two">
+<label>Latitude<input name="latitude" inputmode="decimal" value="{{ event.latitude if event and event.latitude is not none else '' }}" placeholder="48.84622">
+</label>
+<label>Longitude<input name="longitude" inputmode="decimal" value="{{ event.longitude if event and event.longitude is not none else '' }}" placeholder="2.33716">
+</label>
+</div>
+<div class="two">
 <label>Début (heure de Paris)<input type="datetime-local" name="starts_at" value="{{ event.starts_at|inputdate if event else '' }}" required>
 </label>
 <label>Fin (heure de Paris)<input type="datetime-local" name="ends_at" value="{{ event.ends_at|inputdate if event else '' }}" required>

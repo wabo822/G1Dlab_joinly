@@ -122,7 +122,13 @@ def create_app(config=None):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Referrer-Policy'] = 'same-origin'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "img-src 'self' data: https://unpkg.com https://tile.openstreetmap.org "
+            "https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; "
+            "style-src 'self' https://unpkg.com; script-src 'self' https://unpkg.com; "
+            "form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+        )
         if request.path in ('/robots.txt', '/sitemap.xml'):
             response.headers['Cache-Control'] = 'public, max-age=3600'
         elif not request.path.startswith('/static/'):
@@ -832,6 +838,22 @@ def create_app(config=None):
             if len(city) > 80:
                 raise ValueError('La ville est trop longue (80 caractères maximum).')
             payload['city'] = city
+        if 'latitude' in request.form or 'longitude' in request.form:
+            raw_lat = request.form.get('latitude', '').strip()
+            raw_lng = request.form.get('longitude', '').strip()
+            if not raw_lat and not raw_lng:
+                payload['latitude'] = None
+                payload['longitude'] = None
+            else:
+                try:
+                    latitude = Decimal(raw_lat)
+                    longitude = Decimal(raw_lng)
+                except InvalidOperation:
+                    raise ValueError('Indiquez une latitude et une longitude, par exemple 48.84622 et 2.33716.')
+                if not (Decimal('-90') <= latitude <= Decimal('90') and Decimal('-180') <= longitude <= Decimal('180')):
+                    raise ValueError('Coordonnées hors limites.')
+                payload['latitude'] = latitude
+                payload['longitude'] = longitude
         return payload
 
     @app.route('/organizer/new', methods=['GET', 'POST'])

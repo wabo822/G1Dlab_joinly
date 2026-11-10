@@ -1,5 +1,19 @@
 # Journal des modifications
 
+## 2026-11-09 — Carte OpenStreetMap
+
+La fiche d’une activité qui a une latitude et une longitude affiche une carte Leaflet (CDN unpkg) sur le fond OpenStreetMap. La politique de sécurité autorise ces ressources. Les activités de démonstration reçoivent les coordonnées réelles de leur lieu en Île-de-France, y compris si elles existaient déjà.
+
+### Fichiers
+
+- `database/migrations/009_coordinates.sql` — `events.latitude`, `events.longitude`.
+- `app/__init__.py` — saisie des coordonnées et en-tête CSP.
+- `app/static/map.js`, `app/static/app.css`, `app/templates/detail.html`, `event_form.html`
+- `app/seed_demo.py` — coordonnées des lieux de démonstration.
+- `tests/test_app.py`, `CHANGELOG.md`
+
+Empilée sur la bibliothèque d’images (#7).
+
 ## 2026-11-09 — Illustrations de couverture
 
 Chaque activité a une image. Si l’organisateur n’en envoie pas, une illustration de la catégorie est choisie avec un hash stable de l’identifiant : changer de catégorie change l’image. Treize visuels originaux par catégorie (18 catégories) sont dans le dépôt. L’administrateur voit la bibliothèque et peut forcer une image, ou revenir à l’automatique.

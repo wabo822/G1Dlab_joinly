@@ -425,6 +425,8 @@ def test_seed_demo_is_idempotent_and_keeps_existing_accounts(app, db):
     assert third['users_created'] == 0
     assert db.execute("SELECT price_cents FROM events WHERE title='Yoga au parc'").fetchone()['price_cents'] == 800
     assert db.execute("SELECT city FROM events WHERE title='Balade commentée au Luxembourg'").fetchone()['city'] == 'Paris'
+    luxembourg = db.execute("SELECT latitude, longitude FROM events WHERE title='Balade commentée au Luxembourg'").fetchone()
+    assert luxembourg['latitude'] is not None and abs(float(luxembourg['latitude']) - 48.84622) < 0.01
     assert db.execute("SELECT city FROM events WHERE title='Tartes de saison'").fetchone()['city'] == 'Montreuil'
     assert db.execute(
         "SELECT count(*) AS n FROM reviews rv JOIN users u ON u.id=rv.author_id WHERE u.email='kept@example.test'"
@@ -796,3 +798,17 @@ def test_cover_library_is_stable_and_uploads_are_private(app, db, tmp_path):
     assert chosen in app.test_client().get(f'/activities/{eid}').text
     assert admin.post(f'/admin/events/{eid}/cover', data={'cover_choice': 'auto'}).status_code == 302
     assert 'covers/cuisine/' in app.test_client().get(f'/activities/{eid}').text
+
+
+def test_map_uses_coordinates_and_allows_openstreetmap(app, db):
+    owner = user(db, roles=('member', 'organizer'))
+    eid = event(db, owner)
+    plain = app.test_client().get(f'/activities/{eid}')
+    assert 'activity-map' not in plain.text
+    policy = plain.headers['Content-Security-Policy']
+    assert 'unpkg.com' in policy and 'tile.openstreetmap.org' in policy
+    organizer = login(app)
+    assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, latitude='48.8566', longitude='2.3522')).status_code == 302
+    mapped = app.test_client().get(f'/activities/{eid}').text
+    assert 'id="activity-map"' in mapped and 'data-lat="48.8566' in mapped and 'leaflet.js' in mapped
+    assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, latitude='95', longitude='2')).status_code == 400
