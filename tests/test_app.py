@@ -832,6 +832,19 @@ def test_cover_library_is_stable_and_uploads_are_private(app, db, tmp_path):
     assert 'covers/cuisine/' in app.test_client().get(f'/activities/{eid}').text
 
 
+def test_detail_cover_hides_slogan_and_blob(app, db):
+    owner = user(db, roles=('member', 'organizer'))
+    eid = event(db, owner)
+    page = app.test_client().get(f'/activities/{eid}').text
+    # Demo/auto covers are still assigned; a real photo must be clean.
+    if 'class="cover"' in page or 'img class="cover"' in page:
+        assert 'detail-art has-cover' in page
+        assert 'Se retrouver.' not in page
+    else:
+        assert 'Se retrouver.' in page
+        assert 'has-cover' not in page
+
+
 def test_map_uses_coordinates_and_allows_openstreetmap(app, db):
     owner = user(db, roles=('member', 'organizer'))
     eid = event(db, owner)

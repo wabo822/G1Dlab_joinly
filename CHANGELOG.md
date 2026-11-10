@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 2026-11-10 — Photo de la fiche activité
+
+Sur la fiche d’une activité, une vraie photo de couverture s’affiche seule, sans le slogan « Se retrouver. Partager. Recommencer. » ni la forme décorative saumon. Le crédit « Photo : … sur Unsplash » reste sous l’image. Le slogan et la forme ne s’affichent que lorsqu’il n’y a pas de photo.
+
+### Fichiers
+
+- `app/templates/detail.html`, `app/static/app.css`, `tests/test_app.py`, `CHANGELOG.md`
+
+
 ## 2026-11-10 — Carte des activités
 
 La politique de référent passe de `same-origin` à `strict-origin-when-cross-origin` (en-tête Flask et balise meta), pour que les tuiles reçoivent l’origine `https://isep.wangjiahan.com/`. Les tuiles officielles `tile.openstreetmap.org` renvoyaient sinon l’image « Access blocked / 403 » dans le navigateur. La carte utilise les tuiles d’OSM France (`{s}.tile.openstreetmap.fr/osmfr`), qui restent accessibles avec ou sans référent, avec l’attribution « © OpenStreetMap contributors © OSM France ». Les tuiles raster publiques CARTO exigent désormais une clé API et n’ont pas été adoptées. La CSP `img-src` autorise OSM France (et conserve OSM.org). La configuration nginx du site principal ne change pas : le `Referrer-Policy: no-referrer` existant ne concerne que l’aperçu privé, pas l’application.
