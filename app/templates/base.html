@@ -13,7 +13,11 @@
 <meta property="og:title" content="{{ self.title()|trim }}">
 <meta property="og:description" content="{{ self.description()|trim }}">
 <meta property="og:url" content="{{ canonical_url }}">
-<meta property="og:image" content="{{ og_image }}">
+<meta property="og:image" content="{% block og_image %}{{ og_image }}{% endblock %}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ self.title()|trim }}">
+<meta name="twitter:description" content="{{ self.description()|trim }}">
+<meta name="twitter:image" content="{% block twitter_image %}{{ og_image }}{% endblock %}">
 <meta name="theme-color" content="#111738">
 <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">

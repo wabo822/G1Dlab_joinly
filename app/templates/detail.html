@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}{{ event.title }} — Joinly{% endblock %}
 {% block description %}{{ event.category or 'Activité' }} · {{ event.location }} · {{ event.starts_at|datefr }}. {{ event.description|striptags|truncate(140, true) }}{% endblock %}
+{% block og_image %}{{ share_image }}{% endblock %}
+{% block twitter_image %}{{ share_image }}{% endblock %}
 {% block content %}
 <section class="container section">
 <a href="{{ url_for('activities') }}">← Toutes les activités</a>
@@ -17,6 +19,17 @@
 </div>
 <h2>Au programme</h2>
 <p class="prose">{{ event.description }}</p>
+<div id="share-bar" class="actions" data-url="{{ share_url }}" data-title="{{ event.title }}">
+<button type="button" class="secondary small" data-share-copy>Copier le lien</button>
+<button type="button" class="secondary small" data-share-native>Partager</button>
+<a href="https://wa.me/?text={{ share_url|urlencode }}">WhatsApp</a>
+<a href="https://twitter.com/intent/tweet?url={{ share_url|urlencode }}&text={{ event.title|urlencode }}">X</a>
+<a href="https://www.facebook.com/sharer/sharer.php?u={{ share_url|urlencode }}">Facebook</a>
+<a href="https://www.linkedin.com/sharing/share-offsite/?url={{ share_url|urlencode }}">LinkedIn</a>
+<a href="mailto:?subject={{ event.title|urlencode }}&body={{ share_url|urlencode }}">E-mail</a>
+<a href="{{ url_for('poster', event_id=event.id) }}">Télécharger l’affiche</a>
+</div>
+<script src="{{ url_for('static', filename='share.js') }}"></script>
 {% if event.latitude is not none and event.longitude is not none %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <div id="activity-map" class="activity-map" data-lat="{{ event.latitude }}" data-lng="{{ event.longitude }}" data-label="{{ event.title }}"></div>
