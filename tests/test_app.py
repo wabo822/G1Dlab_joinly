@@ -837,12 +837,18 @@ def test_map_uses_coordinates_and_allows_openstreetmap(app, db):
     eid = event(db, owner)
     plain = app.test_client().get(f'/activities/{eid}')
     assert 'activity-map' not in plain.text
+    assert plain.headers['Referrer-Policy'] == 'strict-origin-when-cross-origin'
     policy = plain.headers['Content-Security-Policy']
-    assert 'unpkg.com' in policy and 'tile.openstreetmap.org' in policy
+    assert 'unpkg.com' in policy
+    assert 'tile.openstreetmap.fr' in policy
+    assert 'name="referrer"' in plain.text and 'strict-origin-when-cross-origin' in plain.text
     organizer = login(app)
     assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, latitude='48.8566', longitude='2.3522')).status_code == 302
     mapped = app.test_client().get(f'/activities/{eid}').text
     assert 'id="activity-map"' in mapped and 'data-lat="48.8566' in mapped and 'leaflet.js' in mapped
+    js = Path(__file__).resolve().parents[1].joinpath('app/static/map.js').read_text()
+    assert 'tile.openstreetmap.fr/osmfr' in js
+    assert 'tile.openstreetmap.org/{z}' not in js
     assert organizer.post(f'/organizer/{eid}/edit', data=event_form(db, eid, latitude='95', longitude='2')).status_code == 400
 
 

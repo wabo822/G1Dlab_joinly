@@ -140,11 +140,13 @@ def create_app(config=None):
     def headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['Referrer-Policy'] = 'same-origin'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "img-src 'self' data: https://unpkg.com https://tile.openstreetmap.org "
-            "https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; "
+            "img-src 'self' data: https://unpkg.com https://*.tile.openstreetmap.fr "
+            "https://a.tile.openstreetmap.fr https://b.tile.openstreetmap.fr https://c.tile.openstreetmap.fr "
+            "https://tile.openstreetmap.org https://a.tile.openstreetmap.org "
+            "https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; "
             "style-src 'self' https://unpkg.com; script-src 'self' https://unpkg.com; "
             "worker-src 'self' blob:; media-src 'self' blob:; "
             "form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
