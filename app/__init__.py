@@ -43,7 +43,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
+INTEREST_FREE = {'mcp_endpoint', 'mcp_settings', 'assistant_chat', 'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
 
 
 def _env_cutoff():
@@ -70,6 +70,9 @@ def create_app(config=None):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
+        DEEPSEEK_API_KEY=os.environ.get('DEEPSEEK_API_KEY', '').strip(),
+        DEEPSEEK_MODEL=os.environ.get('DEEPSEEK_MODEL', 'deepseek-flash'),
+        CHAT_DAILY_LIMIT=100,
         GOOGLE_CLIENT_ID=os.environ.get('GOOGLE_CLIENT_ID', '').strip(),
         GOOGLE_CLIENT_SECRET=os.environ.get('GOOGLE_CLIENT_SECRET', '').strip(),
     )
@@ -997,39 +1000,24 @@ def create_app(config=None):
             reservable=not reason_code, reason=messages.get(reason_code, ''),
         )
 
+    def send_booking_notification(event, ticket, user):
+        plain, html_body, images = notify.booking_email(event, ticket, public_base())
+        notify.notify(
+            app, query, user['id'], 'booking_confirmed', 'Place confirmée',
+            plain, f'/billets/{ticket["token"]}', dedupe_key=f'booking:{ticket["reservation_id"]}', email=user['email'],
+            html_body=html_body, inline_images=images,
+        )
+
     @app.post('/activities/<int:event_id>/reserve')
     @require()
     def reserve(event_id):
         if request.form.get('confirm') != '1' or request.form.get('acknowledged') != '1':
             return redirect(url_for('reserve_confirm', event_id=event_id))
+        from app.bookings import create_booking
         with db().transaction():
-            event = query('SELECT * FROM events WHERE id=%s FOR UPDATE', (event_id,), True)
-            if not event:
-                abort(404)
-            count = query("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (event_id,), True)['n']
-            reason = booking_block(
-                event,
-                cutoff_minutes=cutoff_minutes(),
-                available=event['capacity'] - count,
-            )
-            if reason:
-                raise ValueError({
-                    'finished': 'Cette activité est terminée.',
-                    'cutoff': 'Les inscriptions sont closes.',
-                    'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
-                    'cancelled': 'Cette activité est annulée.',
-                    'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
-                }[reason])
-            if event['price_cents'] > 0 and request.form.get('payment_simulated') != '1':
-                raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
-            created = query('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s) RETURNING id', (g.user['id'], event_id), True)
-            ticket = issue_ticket(db(), created['id'])
-        plain, html_body, images = notify.booking_email(event, ticket, public_base())
-        notify.notify(
-            app, query, g.user['id'], 'booking_confirmed', 'Place confirmée',
-            plain, f'/billets/{ticket["token"]}', dedupe_key=f'booking:{created["id"]}', email=g.user['email'],
-            html_body=html_body, inline_images=images,
-        )
+            event, ticket, created = create_booking(db(), g.user['id'], event_id, cutoff_minutes(),
+                                                   request.form.get('payment_simulated') == '1')
+        send_booking_notification(event, ticket, g.user)
         if event['price_cents'] > 0:
             flash('Paiement simulé confirmé. Votre place est réservée — aucun montant n’a été débité.', 'success')
         else:
@@ -1772,7 +1760,9 @@ def create_app(config=None):
     def cleanup():
         for table in ('web_sessions', 'password_resets', 'rate_limits'):
             db().execute(f'DELETE FROM {table} WHERE expires_at<now()')
-        click.echo('Expired sessions, tokens and rate limits removed.')
+        db().execute("DELETE FROM assistant_booking_requests WHERE expires_at<now()-interval '30 days'")
+        db().execute("DELETE FROM mcp_tokens WHERE expires_at<now()-interval '30 days' OR revoked_at<now()-interval '30 days'")
+        click.echo('Expired sessions, tokens, proposals and rate limits removed.')
 
     @app.cli.command('seed-demo')
     def seed_demo_command():
@@ -1799,5 +1789,12 @@ def create_app(config=None):
 
     from app.admin_office import register_office
     register_office(app, query, db, text, email_value, money_cents)
+
+    from app.chatbot import register as register_chatbot
+    from app.assistant_tools import ToolService
+    assistant_tools = ToolService(query, db, cutoff_minutes)
+    from app.mcp_server import register as register_mcp
+    register_mcp(app, query, db, assistant_tools, send_booking_notification)
+    register_chatbot(app, query, db, cutoff_minutes, assistant_tools)
 
     return app

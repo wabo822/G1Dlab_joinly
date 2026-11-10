@@ -1,0 +1,22 @@
+<div class="joinly-chat" id="joinly-chat" data-endpoint="{{ url_for('assistant_chat') }}">
+  <button type="button" class="chat-launcher" id="chat-toggle" aria-expanded="false" aria-controls="chat-panel" aria-label="Ouvrir l’assistant Joinly">
+    <svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 8V4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="20" cy="3.5" r="2.5" fill="currentColor"/><rect x="6" y="10" width="28" height="23" rx="9" stroke="currentColor" stroke-width="2.5"/><path d="M3 18v8m34-8v8M15 27c3 2 7 2 10 0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="14" cy="19" r="2.5" fill="currentColor"/><circle cx="26" cy="19" r="2.5" fill="currentColor"/></svg>
+    <span>Une idée de sortie ?</span><span class="chat-online" aria-hidden="true"></span>
+  </button>
+  <section class="chat-panel" id="chat-panel" hidden role="dialog" aria-labelledby="chat-title" aria-describedby="chat-disclosure">
+    <header class="chat-header"><div><span class="chat-eyebrow">UN COUP DE POUCE POUR VOS SORTIES</span><h2 id="chat-title">Joinly Assistant <span>✦</span></h2><p>Des idées, des réponses, des rencontres.</p></div><button type="button" class="chat-icon-button" id="chat-close" aria-label="Fermer le chat">×</button></header>
+    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"><div class="chat-message chat-assistant"><span class="chat-speaker">Joinly</span><p>Bonjour ! Une envie de sortie ? Dites-moi ce que vous aimez, où et quand. Je peux aussi vous aider à utiliser Joinly.</p></div></div>
+    <div class="chat-suggestions" id="chat-suggestions"><button type="button" data-prompt="Quelles activités sont disponibles prochainement ?">Trouver une sortie ↗</button><button type="button" data-prompt="Comment réserver une activité sur Joinly ?">Comment réserver ?</button><button type="button" data-prompt="Comment organiser ma première activité ?">Organiser une activité</button></div>
+    <form id="chat-form" class="chat-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p id="chat-disclosure" class="chat-disclosure">Assistant IA · Vos messages, le contexte public et les données que vous autorisez sont envoyés à DeepSeek. Évitez les informations sensibles. Les réponses peuvent contenir des erreurs. <a href="{{ url_for('legal',kind='privacy') }}">Confidentialité</a></p>
+      <label class="chat-check"><input id="chat-consent" type="checkbox" required>J’accepte l’envoi de mes messages à DeepSeek.</label>
+      {% if chat_profile_allowed %}<label class="chat-check"><input id="chat-profile" type="checkbox">Utiliser aussi mes intérêts et ma zone préférée</label>{% endif %}
+      {% if g.user and not g.impersonating %}<label class="chat-check"><input id="chat-bookings" type="checkbox">Autoriser la consultation de mes inscriptions et la préparation de réservations (confirmation sur Joinly)</label>{% endif %}
+      <label class="chat-input-label" for="chat-input">Votre message</label>
+      <div class="chat-compose"><textarea id="chat-input" name="message" rows="2" maxlength="1200" placeholder="Une sortie à Paris ce week-end…" required></textarea><button type="submit" id="chat-send" aria-label="Envoyer le message">↑</button></div>
+      <div class="chat-bottom"><span id="chat-status" role="status">Conversation conservée uniquement sur cette page.</span><button type="button" id="chat-clear">Effacer</button></div>
+    </form>
+  </section>
+</div>
+<script src="{{ url_for('static',filename='chatbot.js') }}" defer></script>
