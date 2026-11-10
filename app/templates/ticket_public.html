@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Billet {{ ticket.code }} — {{ event.title }} — Joinly{% endblock %}
+{% block robots %}noindex,nofollow,noarchive{% endblock %}
+{% block content %}
+<section class="container section narrow">
+<p class="eyebrow">BILLET ÉLECTRONIQUE</p>
+{% if cancelled %}
+<p class="notice error">Ce billet n’est plus valable : la réservation a été annulée.</p>
+<h1>{{ event.title }}</h1>
+<p>{{ event.starts_at|datefr }} · {{ event.location }}</p>
+<p class="ticket-code">{{ ticket.code }}</p>
+{% else %}
+<h1>{{ event.title }}</h1>
+<p>{{ event.starts_at|datefr }} · {{ event.location }}</p>
+<p class="muted">{{ event.price_cents|pricefr }} · Organisé par {{ organizer }}</p>
+<p class="ticket-code">{{ ticket.code }}</p>
+<img class="ticket-qr" src="{{ url_for('public_ticket_qr', token=ticket.token) }}" width="280" height="280" alt="QR code du billet {{ ticket.code }}">
+{% if ticket.checked_in_at %}
+<p class="notice">Contrôlé le {{ ticket.checked_in_at|datefr }}.</p>
+{% else %}
+<p class="muted">Présentez ce QR code ou le code du billet à l’entrée. Conservez ce lien, il n’est pas nécessaire d’être connecté.</p>
+{% endif %}
+{% if g.user %}
+<p><a href="{{ url_for('tickets_page') }}">Voir tous mes billets</a></p>
+{% endif %}
+{% endif %}
+</section>
+{% endblock %}

@@ -1141,3 +1141,96 @@ def test_admin_office_exports_edits_and_impersonates(app, db):
     assert office.post('/impersonation/stop').status_code == 302
     assert db.execute("SELECT count(*) AS n FROM audit_log WHERE action='impersonate.start'").fetchone()['n'] == 1
     assert 'impersonate.start' in office.get('/admin/journal').text
+
+def test_booking_email_lists_ticket_and_public_page_needs_no_login(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    guest = user(db, 'guest@example.test')
+    eid = event(db, owner, 4)
+    client = login(app, 'guest@example.test')
+    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    ticket = db.execute(
+        '''SELECT t.id, t.code, t.token FROM tickets t JOIN reservations r ON r.id=t.reservation_id
+           WHERE r.event_id=%s AND r.member_id=%s''',
+        (eid, guest),
+    ).fetchone()
+    mail = db.execute(
+        "SELECT subject, body FROM dev_outbox WHERE recipient='guest@example.test' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert mail and 'Place confirmée' in mail['subject']
+    assert ticket['code'] in mail['body']
+    assert f"/billets/{ticket['token']}" in mail['body']
+    assert 'Balade' in mail['body']
+    public = app.test_client().get(f"/billets/{ticket['token']}")
+    assert public.status_code == 200
+    assert ticket['code'] in public.text and 'Balade' in public.text
+    qr = app.test_client().get(f"/billets/{ticket['token']}/qr.png")
+    assert qr.status_code == 200 and qr.mimetype == 'image/png' and qr.data.startswith(b'\x89PNG')
+    assert app.test_client().get('/billets/not-a-real-token').status_code == 404
+    robots = app.test_client().get('/robots.txt').text
+    assert 'Disallow: /billets/' in robots
+    bid = db.execute('SELECT id FROM reservations WHERE member_id=%s AND event_id=%s', (guest, eid)).fetchone()['id']
+    assert client.post(f'/reservations/{bid}/cancel').status_code == 302
+    cancelled = app.test_client().get(f"/billets/{ticket['token']}")
+    assert cancelled.status_code == 200 and 'n’est plus valable' in cancelled.text
+    assert app.test_client().get(f"/billets/{ticket['token']}/qr.png").status_code == 404
+
+
+def test_booking_html_email_embeds_inline_qr(app, db, monkeypatch):
+    sent = []
+
+    class Capture:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self, **kwargs):
+            return None
+
+        def login(self, *args):
+            return None
+
+        def send_message(self, message):
+            sent.append(message)
+
+    monkeypatch.setenv('SMTP_HOST', 'mail.example.test')
+    monkeypatch.setenv('MAIL_FROM', 'noreply@wangjiahan.com')
+    monkeypatch.setenv('PUBLIC_BASE_URL', 'https://isep.wangjiahan.com')
+    app.config['PUBLIC_BASE_URL'] = 'https://isep.wangjiahan.com'
+    monkeypatch.setattr('app.notify.smtplib.SMTP', Capture)
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    guest = user(db, 'mailer@example.test')
+    eid = event(db, owner, 4)
+    db.execute('UPDATE events SET price_cents=1500 WHERE id=%s', (eid,))
+    client = login(app, 'mailer@example.test')
+    assert client.post(f'/activities/{eid}/reserve', data={'payment_simulated': '1'}).status_code == 302
+    ticket = db.execute(
+        '''SELECT t.code, t.token FROM tickets t JOIN reservations r ON r.id=t.reservation_id
+           WHERE r.event_id=%s AND r.member_id=%s''',
+        (eid, guest),
+    ).fetchone()
+    assert sent
+    message = sent[0]
+    html = None
+    png = None
+    cids = []
+    for part in message.walk():
+        cid = part.get('Content-ID') or part.get('Content-Id') or ''
+        if cid:
+            cids.append(cid)
+        if part.get_content_type() == 'text/html':
+            payload = part.get_payload(decode=True)
+            html = payload.decode() if isinstance(payload, (bytes, bytearray)) else (payload or part.get_content())
+        if part.get_content_type() == 'image/png':
+            png = part.get_payload(decode=True)
+    assert html and 'Place confirmée' in html
+    assert 'cid:ticket-qr' in html
+    assert ticket['code'] in html
+    assert f"https://isep.wangjiahan.com/billets/{ticket['token']}" in html
+    assert 'Paiement simulé' in html
+    assert any('ticket-qr' in cid for cid in cids)
+    assert png and png.startswith(b'\x89PNG')

@@ -15,6 +15,9 @@
 <p class="ticket-code">{{ row.code }}</p>
 {% if row.ticket_id %}
 <img src="{{ url_for('ticket_qr', ticket_id=row.ticket_id) }}" width="220" height="220" alt="QR code du billet {{ row.code }}">
+{% if row.token %}
+<p><a href="{{ url_for('public_ticket', token=row.token) }}">Ouvrir le billet (lien à présenter)</a></p>
+{% endif %}
 {% endif %}
 <p class="muted">{% if row.checked_in_at %}Contrôlé le {{ row.checked_in_at|datefr }}{% else %}À présenter à l’entrée.{% endif %}</p>
 {% endif %}
