@@ -8,6 +8,7 @@ neighboring cards when another file exists.
 """
 import hashlib
 import io
+import json
 import re
 import secrets
 from pathlib import Path
@@ -155,14 +156,40 @@ def href_for(event, static_path):
     return url_for('media', filename=static_path)
 
 
+def credits_map():
+    path = LIBRARY / 'credits.json'
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def credit_for(static_path):
+    if not static_path or not str(static_path).startswith('covers/'):
+        return None
+    row = credits_map().get(static_path)
+    if not isinstance(row, dict) or not row.get('photographer'):
+        return None
+    return row
+
+
+def present(event, path):
+    library = bool(path) and str(path).startswith('covers/')
+    event['cover_static'] = path if library else None
+    event['cover_href'] = href_for(event, path) if path else None
+    event['cover_credit'] = credit_for(path) if library else None
+
+
 def decorate(events):
     """Set cover_href and cover_static on each event dict. Neighbor shift is list-local."""
     previous = None
     for event in events:
         custom = event.get('cover_image')
         if custom:
-            event['cover_static'] = custom if str(custom).startswith('covers/') else None
-            event['cover_href'] = href_for(event, custom)
+            present(event, custom)
             previous = custom
             continue
         files = library_files(event.get('category'))
@@ -172,8 +199,7 @@ def decorate(events):
         if path and path == previous and len(files) > 1:
             name = pick_auto(event.get('id'), files, 1)
             path = f'covers/{slug}/{name}'
-        event['cover_static'] = path
-        event['cover_href'] = href_for(event, path) if path else None
+        present(event, path)
         previous = path
     return events
 

@@ -17,6 +17,9 @@
 {% endif %}
 <span>Se retrouver.<br>Partager.<br>Recommencer.</span>
 </div>
+{% if event.cover_credit %}
+<p class="muted">Photo : <a href="{{ event.cover_credit.profile_url }}" rel="noopener noreferrer">{{ event.cover_credit.photographer }}</a> sur <a href="{{ event.cover_credit.photo_url }}" rel="noopener noreferrer">Unsplash</a></p>
+{% endif %}
 <h2>Au programme</h2>
 <p class="prose">{{ event.description }}</p>
 <div id="share-bar" class="actions" data-url="{{ share_url }}" data-title="{{ event.title }}">

@@ -1,5 +1,17 @@
 # Journal des modifications
 
+## 2026-11-09 — Photos Unsplash
+
+`scripts/fetch_unsplash_covers.py` lit `UNSPLASH_ACCESS_KEY` dans l’environnement (la clé n’est pas versionnée). Il cherche 13 photos paysage par catégorie, déclenche `download_location` une fois par photo, et reste en dessous de 50 requêtes par heure : il attend la fenêtre suivante plutôt que de dépasser le plafond. La fiche d’une activité montre « Photo : nom sur Unsplash » avec les liens `utm_source=joinly_isep&utm_medium=referral`. Les crédits sont dans `docs/image-credits.md` et `app/static/covers/credits.json`.
+
+### Fichiers
+
+- `scripts/fetch_unsplash_covers.py`
+- `app/covers.py`, `app/templates/detail.html`, `tests/test_app.py`
+- `app/static/covers/**`, `docs/image-credits.md`, `README.md`, `CHANGELOG.md`
+
+Empilée sur les photographies Wikimedia (#17).
+
 ## 2026-11-09 — Photographies de couverture
 
 Les 13 visuels de chaque catégorie sont des photographies distinctes, recadrées en WebP 1200×675 sous 150 Ko. Les API Unsplash et Pexels répondent 401 sans clé : `scripts/fetch_covers.py` interroge Wikimedia Commons, au plus 40 requêtes par heure, et reprend depuis `instance/cover-fetch.json` au lieu de s’arrêter quand le budget horaire est atteint. Les crédits (URL, auteur, licence) sont dans `docs/image-credits.md`. L’attribution automatique par hash ne change pas.
