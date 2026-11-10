@@ -42,6 +42,24 @@
 {% else %}
 <p class="muted">Les activités terminées et les inscriptions annulées apparaîtront ici.</p>
 {% endfor %}
+<h2>Mes favoris</h2>
+{% for event in favorites %}
+<article class="panel booking-row">
+<h3><a href="{{ url_for('detail', event_id=event.id) }}">{{ event.title }}</a></h3>
+<p>{{ event.starts_at|datefr }} · {{ event.location }}</p>
+</article>
+{% else %}
+<p class="muted">Les activités que vous mettez de côté apparaîtront ici.</p>
+{% endfor %}
+<h2>Organisateurs suivis</h2>
+{% for person in followed %}
+<article class="panel booking-row">
+<h3><a href="{{ url_for('organizer_public', user_id=person.id) }}">{{ person.display_name }}</a></h3>
+<p class="muted">{{ person.followers }} abonné{{ 's' if person.followers != 1 else '' }}</p>
+</article>
+{% else %}
+<p class="muted">Les organisateurs que vous suivez apparaîtront ici.</p>
+{% endfor %}
 </div>
 <aside class="panel">
 <h2>Mon profil</h2>

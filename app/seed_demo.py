@@ -311,6 +311,43 @@ def _seed_reviews(conn, event_id, title, stats):
             stats['reviews_created'] += 1
 
 
+def _seed_social(conn, organizer_ids, member_ids, stats):
+    for index, member_id in enumerate(member_ids):
+        targets = []
+        first = organizer_ids[index % len(organizer_ids)]
+        second = organizer_ids[(index + 2) % len(organizer_ids)]
+        for organizer_id in (first, second):
+            if organizer_id != member_id and organizer_id not in targets:
+                targets.append(organizer_id)
+        for organizer_id in targets:
+            inserted = conn.execute(
+                '''INSERT INTO organizer_follows(follower_id, organizer_id)
+                   VALUES (%s, %s) ON CONFLICT DO NOTHING RETURNING follower_id''',
+                (member_id, organizer_id),
+            ).fetchone()
+            if inserted:
+                stats['follows_created'] += 1
+    event_ids = [
+        row['id'] for row in conn.execute(
+            '''SELECT e.id FROM events e JOIN users u ON u.id = e.organizer_id
+               WHERE u.email LIKE %s AND e.status = 'published' ORDER BY e.id''',
+            (f'%@{DEMO_DOMAIN}',),
+        ).fetchall()
+    ]
+    for index, member_id in enumerate(member_ids):
+        if not event_ids:
+            break
+        for offset in (0, 5):
+            event_id = event_ids[(index * 3 + offset) % len(event_ids)]
+            inserted = conn.execute(
+                '''INSERT INTO favorites(user_id, event_id) VALUES (%s, %s)
+                   ON CONFLICT DO NOTHING RETURNING user_id''',
+                (member_id, event_id),
+            ).fetchone()
+            if inserted:
+                stats['favorites_created'] += 1
+
+
 def seed_demo(conn):
     """Insert demo reference data. Requires a dict_row connection and migration 004."""
     stats = {
@@ -318,6 +355,8 @@ def seed_demo(conn):
         'events_created': 0,
         'bookings_created': 0,
         'reviews_created': 0,
+        'favorites_created': 0,
+        'follows_created': 0,
         'faqs_created': 0,
         'legal_published': [],
     }
@@ -419,6 +458,7 @@ def seed_demo(conn):
                 confirmed.add(member_id)
                 stats['bookings_created'] += 1
             _seed_reviews(conn, event_id, title, stats)
+        _seed_social(conn, organizer_ids, member_ids, stats)
 
         stats['demo_users'] = conn.execute(
             'SELECT count(*) AS n FROM users WHERE email LIKE %s',
