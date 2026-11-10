@@ -42,7 +42,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster', 'stop_impersonation'}
+INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
 
 
 def _env_cutoff():
@@ -976,10 +976,11 @@ def create_app(config=None):
                 raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
             created = query('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s) RETURNING id', (g.user['id'], event_id), True)
             ticket = issue_ticket(db(), created['id'])
+        plain, html_body, images = notify.booking_email(event, ticket, public_base())
         notify.notify(
             app, query, g.user['id'], 'booking_confirmed', 'Place confirmée',
-            f'Votre inscription à « {event["title"]} » est confirmée. Billet {ticket["code"]}.',
-            '/account/billets', dedupe_key=f'booking:{created["id"]}', email=g.user['email'],
+            plain, f'/billets/{ticket["token"]}', dedupe_key=f'booking:{created["id"]}', email=g.user['email'],
+            html_body=html_body, inline_images=images,
         )
         if event['price_cents'] > 0:
             flash('Paiement simulé confirmé. Votre place est réservée — aucun montant n’a été débité.', 'success')
@@ -1284,6 +1285,7 @@ def create_app(config=None):
             'Disallow: /notifications\n'
             'Disallow: /organizer\n'
             'Disallow: /reset-password/\n'
+            'Disallow: /billets/\n'
             '\n'
             f'Sitemap: {base}/sitemap.xml\n'
         )
@@ -1331,7 +1333,7 @@ def create_app(config=None):
     @require()
     def tickets_page():
         rows = query(
-            '''SELECT r.id, r.status, e.title, e.starts_at, e.location, t.id AS ticket_id, t.code, t.checked_in_at
+            '''SELECT r.id, r.status, e.title, e.starts_at, e.location, t.id AS ticket_id, t.code, t.token, t.checked_in_at
                FROM reservations r JOIN events e ON e.id=r.event_id
                LEFT JOIN tickets t ON t.reservation_id=r.id
                WHERE r.member_id=%s ORDER BY e.starts_at DESC''',
@@ -1352,6 +1354,42 @@ def create_app(config=None):
             abort(404)
         if row['member_id'] != g.user['id'] and row['organizer_id'] != g.user['id'] and 'admin' not in g.roles:
             abort(403)
+        return app.response_class(qr_png(payload_for(row['token'], public_base())), mimetype='image/png')
+
+    @app.get('/billets/<token>')
+    def public_ticket(token):
+        token = (token or '').strip()
+        if len(token) < 32 or len(token) > 200:
+            abort(404)
+        row = query(
+            "SELECT t.id, t.token, t.code, t.checked_in_at, r.status AS reservation_status,"
+            " e.title, e.starts_at, e.location, e.price_cents, u.display_name AS organizer"
+            " FROM tickets t"
+            " JOIN reservations r ON r.id = t.reservation_id"
+            " JOIN events e ON e.id = r.event_id"
+            " JOIN users u ON u.id = e.organizer_id"
+            " WHERE t.token=%s",
+            (token,), True,
+        )
+        if not row:
+            abort(404)
+        return render_template(
+            'ticket_public.html', ticket=row, event=row, organizer=row['organizer'],
+            cancelled=row['reservation_status'] != 'confirmed',
+        )
+
+    @app.get('/billets/<token>/qr.png')
+    def public_ticket_qr(token):
+        token = (token or '').strip()
+        if len(token) < 32 or len(token) > 200:
+            abort(404)
+        row = query(
+            "SELECT t.token, r.status FROM tickets t"
+            " JOIN reservations r ON r.id = t.reservation_id WHERE t.token=%s",
+            (token,), True,
+        )
+        if not row or row['status'] != 'confirmed':
+            abort(404)
         return app.response_class(qr_png(payload_for(row['token'], public_base())), mimetype='image/png')
 
     @app.route('/organizer/<int:event_id>/controle', methods=['GET', 'POST'])
