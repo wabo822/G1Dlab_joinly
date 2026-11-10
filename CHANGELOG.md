@@ -1,5 +1,20 @@
 # Journal des modifications
 
+## 2026-11-09 — Code de confirmation à l’inscription
+
+L’inscription envoie un code à 6 chiffres. Le compte reste non confirmé tant que le code n’est pas saisi. Ordre : inscription, code, centres d’intérêt, accueil. Le code est haché, expire en 15 minutes, accepte 5 essais, et un renvoi attend 60 secondes. Sans SMTP, le code est écrit dans le journal (`Verification code for …`) et dans `dev_outbox`. L’e-mail est en français, avec l’en-tête Joinly. `MAIL_FROM` de production : `noreply@wangjiahan.com`.
+
+La migration marque vérifiés les comptes déjà présents, y compris la démonstration. Les nouveaux comptes de démonstration sont créés déjà vérifiés.
+
+### Fichiers
+
+- `database/migrations/011_email_verification.sql`
+- `app/notify.py`, `app/__init__.py`, `app/seed_demo.py`
+- `app/templates/auth.html`
+- `tests/test_app.py`, `.env.example`, `CHANGELOG.md`
+
+Empilée sur les notifications (#9).
+
 ## 2026-11-09 — Notifications et rappels
 
 Une cloche indique le nombre de notifications non lues. Une réservation confirmée, un changement, une annulation, un rappel 24 h avant, une nouvelle activité d’un organisateur suivi et un nouvel avis créent une notification. La confirmation, le changement, l’annulation et le rappel partent aussi par le SMTP déjà configuré (Brevo). Un échec d’envoi est journalisé et ne fait pas échouer la requête. Sans SMTP, le message est écrit dans `dev_outbox` et dans le journal.

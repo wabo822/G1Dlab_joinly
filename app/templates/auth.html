@@ -1,13 +1,26 @@
 {% extends 'base.html' %}
-{% block title %}{{ {'login':'Connexion','signup':'Inscription','forgot':'Mot de passe oublié','reset':'Nouveau mot de passe'}[mode] }} — Joinly{% endblock %}
+{% block title %}{{ {'login':'Connexion','signup':'Inscription','forgot':'Mot de passe oublié','reset':'Nouveau mot de passe','verify':'Confirmer l’e-mail'}[mode] }} — Joinly{% endblock %}
 {% block description %}Accédez à votre compte Joinly pour réserver une activité ou publier la vôtre.{% endblock %}
 {% block robots %}noindex,follow{% endblock %}
 {% block content %}
 <section class="container section">
 <div class="auth panel{% if mode == 'signup' %} auth-wide{% endif %}">
 <p class="eyebrow">BIENVENUE CHEZ JOINLY</p>
-<h1>{{ {'login':'Heureux de vous revoir.','signup':'Les rencontres commencent ici.','forgot':'Un nouveau départ.','reset':'Votre nouveau mot de passe.'}[mode] }}</h1>
-{% if mode == 'forgot' and not configured %}
+<h1>{{ {'login':'Heureux de vous revoir.','signup':'Les rencontres commencent ici.','forgot':'Un nouveau départ.','reset':'Votre nouveau mot de passe.','verify':'Confirmez votre adresse.'}[mode] }}</h1>
+{% if mode == 'verify' %}
+<p>Saisissez le code à 6 chiffres envoyé à votre adresse. Il expire dans 15 minutes.</p>
+<form method="post" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Adresse e-mail<input type="email" name="email" value="{{ email or '' }}" maxlength="254" required></label>
+<label>Code<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label>
+<button>Confirmer</button>
+</form>
+<form method="post" action="{{ url_for('resend_verification') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="email" value="{{ email or '' }}">
+<button class="secondary" type="submit">Renvoyer le code</button>
+</form>
+{% elif mode == 'forgot' and not configured %}
 <p>La réinitialisation par e-mail sera disponible après la configuration de l’envoi d’e-mails.</p>
 <a href="{{ url_for('contact') }}">Contacter l’équipe</a>
 {% else %}
@@ -34,13 +47,9 @@
 <option value="organizer">Participer et organiser des activités</option>
 </select>
 </label>
-<fieldset class="interest-fieldset">
-<legend>Centres d’intérêt — 3 minimum</legend>
-{% include '_interests.html' %}
-</fieldset>
-<p class="muted">En créant un compte, vous acceptez les <a href="{{ url_for('legal', kind='terms') }}">conditions d’utilisation</a> et reconnaissez avoir pris connaissance de la <a href="{{ url_for('legal', kind='privacy') }}">politique de confidentialité</a>.</p>
+<p class="muted">En créant un compte, vous acceptez les <a href="{{ url_for('legal', kind='terms') }}">conditions d’utilisation</a> et reconnaissez avoir pris connaissance de la <a href="{{ url_for('legal', kind='privacy') }}">politique de confidentialité</a>. Un code à 6 chiffres confirmera votre adresse avant le choix des centres d’intérêt.</p>
 {% endif %}
-<button {% if mode == 'signup' %}data-interest-submit{% endif %}>{{ {'login':'Se connecter','signup':'Créer mon compte','forgot':'Recevoir un lien','reset':'Changer mon mot de passe'}[mode] }}</button>
+<button>{{ {'login':'Se connecter','signup':'Créer mon compte','forgot':'Recevoir un lien','reset':'Changer mon mot de passe','verify':'Confirmer'}[mode] }}</button>
 </form>
 {% endif %}
 {% if mode == 'login' %}

@@ -293,7 +293,7 @@ def _ensure_user(conn, email, name, role, stats):
     if row:
         return row['id'], False
     user_id = conn.execute(
-        'INSERT INTO users(email, display_name, password_hash) VALUES (%s, %s, %s) RETURNING id',
+        'INSERT INTO users(email, display_name, password_hash, email_verified_at) VALUES (%s, %s, %s, now()) RETURNING id',
         (email, name, generate_password_hash(DEMO_PASSWORDS[role])),
     ).fetchone()['id']
     roles = ['member']
