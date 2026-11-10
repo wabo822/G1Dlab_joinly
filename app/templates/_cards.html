@@ -1,16 +1,18 @@
 <div class="cards">
 {% for event in events %}
 <article class="activity">
-<div class="card-art art-{{ loop.index0 % 4 }}">
+<div class="card-art art-{{ loop.index0 % 4 }}{% if event.cover_href %} has-cover{% endif %}">
 {% if event.cover_href %}
 <img class="cover" src="{{ event.cover_href }}" alt="">
 {% endif %}
 {% if event.rank %}
 <span class="rank-badge rank-{{ event.rank if event.rank < 4 else 'n' }}"><span class="sr-only">Rang </span>{{ event.rank }}</span>
 {% endif %}
-<span>{{ event.category_icon }} {{ event.category or 'À découvrir' }}</span>
-<strong>{{ event.starts_at|daynum }}<small>{{ event.starts_at|monthfr }}</small></strong>
+<span class="art-category">{{ event.category_icon }} {{ event.category or 'À découvrir' }}</span>
+<div class="art-when">
+<strong class="art-date">{{ event.starts_at|daynum }}<small>{{ event.starts_at|monthfr }}</small></strong>
 <span class="art-label">{{ event.starts_at|timefr }}</span>
+</div>
 </div>
 <div class="card-body">
 <div class="meta">
