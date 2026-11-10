@@ -39,6 +39,7 @@
 <label>Trier<select name="sort">
 <option value="date" {% if request.args.get('sort','date') == 'date' %}selected{% endif %}>Date</option>
 <option value="popularity" {% if request.args.get('sort') == 'popularity' %}selected{% endif %}>Popularité</option>
+<option value="rating" {% if request.args.get('sort') == 'rating' %}selected{% endif %}>Note</option>
 <option value="price" {% if request.args.get('sort') == 'price' %}selected{% endif %}>Prix</option>
 </select>
 </label>

@@ -1,5 +1,18 @@
 # Journal des modifications
 
+## 2026-11-09 — Avis et notes
+
+Après la fin d’une activité, chaque participant dont l’inscription est encore confirmée peut laisser une note de 1 à 5 et un commentaire. Un seul avis par personne et par activité, modifiable. La moyenne et le nombre d’avis s’affichent sur les cartes et la fiche. L’administrateur peut masquer un avis : il sort alors de la moyenne et de la liste publique.
+
+### Fichiers
+
+- `database/migrations/006_reviews.sql` — table `reviews`.
+- `app/__init__.py` — dépôt et modification d’un avis, moyenne, tri par note, modération.
+- `app/seed_demo.py` — avis en français pour les activités de démonstration déjà terminées, uniquement depuis les comptes `@demo.joinly.fr`, sans doublon au second passage.
+- `app/templates/detail.html`, `_cards.html`, `activities.html`, `admin.html` — affichage, formulaire et masquage.
+- `tests/test_app.py` — règles d’avis et idempotence du jeu de démonstration.
+- `CHANGELOG.md`, `README.md`.
+
 ## 2026-11-09 — Activités terminées, recherche et pagination
 
 Une activité est « Terminée » dès que son heure de fin est passée, calculée en heure de Paris. Le catalogue par défaut, les recommandations et le classement ne la montrent plus. Elle reste accessible par son adresse, dans l’historique du participant, et dans le filtre « activités passées ».

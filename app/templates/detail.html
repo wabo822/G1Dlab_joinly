@@ -8,7 +8,7 @@
 <article>
 <p class="eyebrow">{{ event.category_icon }} {{ event.category or 'ACTIVITÉ' }} · {{ event.price_cents|pricefr }}</p>
 <h1>{{ event.title }}</h1>
-<p class="lead">Proposé par {{ event.organizer }}</p>
+<p class="lead">Proposé par {{ event.organizer }}{% if event.rating_count %} · {{ event.rating_avg }} ★ ({{ event.rating_count }} avis){% endif %}</p>
 <div class="detail-art">
 <span>Se retrouver.<br>Partager.<br>Recommencer.</span>
 </div>
@@ -71,5 +71,40 @@
 {% endif %}
 </aside>
 </div>
+<section class="container section">
+<h2>Avis</h2>
+{% if can_review %}
+<form method="post" action="{{ url_for('review', event_id=event.id) }}" class="panel stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Note
+<select name="rating" required>
+{% for star in range(1, 6) %}
+<option value="{{ star }}" {% if mine and mine.rating == star %}selected{% endif %}>{{ star }} ★</option>
+{% endfor %}
+</select>
+</label>
+<label>Commentaire
+<textarea name="comment" rows="4" maxlength="2000" required>{{ mine.comment if mine else '' }}</textarea>
+</label>
+{% if mine and mine.hidden %}
+<p class="notice">Votre avis est masqué par la modération. Vous pouvez le modifier ; il reste masqué.</p>
+{% endif %}
+<button>{{ 'Mettre à jour mon avis' if mine else 'Publier mon avis' }}</button>
+</form>
+{% elif g.user and booking and event.ends_at > now %}
+<p class="muted">Vous pourrez noter cette activité une fois qu’elle sera terminée.</p>
+{% endif %}
+{% for item in reviews %}
+{% if not item.hidden or (mine and item.id == mine.id) %}
+<article class="panel booking-row">
+<strong>{{ item.rating }} ★ · {{ item.display_name }}</strong>
+{% if item.hidden %}<span class="badge">Masqué</span>{% endif %}
+<p class="prose">{{ item.comment }}</p>
+</article>
+{% endif %}
+{% else %}
+<p class="muted">Pas encore d’avis.</p>
+{% endfor %}
+</section>
 </section>
 {% endblock %}

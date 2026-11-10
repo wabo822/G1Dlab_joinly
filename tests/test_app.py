@@ -426,6 +426,16 @@ def test_seed_demo_is_idempotent_and_keeps_existing_accounts(app, db):
     assert db.execute("SELECT price_cents FROM events WHERE title='Yoga au parc'").fetchone()['price_cents'] == 800
     assert db.execute("SELECT city FROM events WHERE title='Balade commentée au Luxembourg'").fetchone()['city'] == 'Paris'
     assert db.execute("SELECT city FROM events WHERE title='Tartes de saison'").fetchone()['city'] == 'Montreuil'
+    assert db.execute(
+        "SELECT count(*) AS n FROM reviews rv JOIN users u ON u.id=rv.author_id WHERE u.email='kept@example.test'"
+    ).fetchone()['n'] == 0
+    review_count = db.execute('SELECT count(*) AS n FROM reviews').fetchone()['n']
+    assert review_count > 0
+    assert db.execute(
+        'SELECT count(*) AS n FROM reviews rv JOIN events e ON e.id=rv.event_id WHERE e.ends_at > now()'
+    ).fetchone()['n'] == 0
+    seed_demo(db)
+    assert db.execute('SELECT count(*) AS n FROM reviews').fetchone()['n'] == review_count
     assert member.get('/').status_code == 200
     assert 'Recommandé pour vous' in member.get('/').text
 
@@ -647,7 +657,7 @@ def test_activity_search_filters_sort_and_pagination(app, db):
     by_popularity = client.get('/activities?sort=popularity').text
     assert by_popularity.index('Atelier suivi') < by_popularity.index('Atelier gratuit')
     assert client.get('/activities?when=later').status_code == 400
-    assert client.get('/activities?sort=rating').status_code == 400
+    assert client.get('/activities?sort=nope').status_code == 400
     assert client.get('/activities?max=abc').status_code == 400
     for index in range(13):
         created = event(db, owner, 3)
@@ -661,3 +671,43 @@ def test_activity_search_filters_sort_and_pagination(app, db):
     assert 'Pageitem 00' in first and 'Pageitem 12' not in first
     assert 'Pageitem 12' in second and 'Suivant' not in second
     assert 'Précédent' in second
+
+
+def test_reviews_are_unique_editable_and_moderated(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    guest_id = user(db, 'guest@example.test')
+    stranger = user(db, 'stranger@example.test')
+    user(db, 'admin@example.test', ('member', 'admin'), interests=False)
+    eid = event(db, owner, 4)
+    other = event(db, owner, 4)
+    db.execute("UPDATE events SET title='Notée haut' WHERE id=%s", (eid,))
+    db.execute("UPDATE events SET title='Notée bas' WHERE id=%s", (other,))
+    guest = login(app, 'guest@example.test')
+    assert guest.post(f'/activities/{eid}/reserve').status_code == 302
+    assert guest.post(f'/activities/{eid}/avis', data={'rating': '5', 'comment': 'Trop tôt'}).status_code == 400
+    db.execute("UPDATE events SET starts_at=now()-interval '3 hours', ends_at=now()-interval '1 hour' WHERE id=%s", (eid,))
+    db.execute("UPDATE events SET starts_at=now()-interval '5 hours', ends_at=now()-interval '4 hours' WHERE id=%s", (other,))
+    db.execute('INSERT INTO reservations(member_id, event_id) VALUES (%s, %s)', (stranger, other))
+    assert guest.post(f'/activities/{eid}/avis', data={'rating': '4', 'comment': 'Très belle ambiance.'}).status_code == 302
+    assert guest.post(f'/activities/{eid}/avis', data={'rating': '5', 'comment': 'Encore mieux après coup.'}).status_code == 302
+    assert db.execute('SELECT count(*) AS n FROM reviews').fetchone()['n'] == 1
+    assert login(app, 'stranger@example.test').post(
+        f'/activities/{eid}/avis', data={'rating': '1', 'comment': 'Je n’y étais pas.'}
+    ).status_code == 400
+    page = app.test_client().get(f'/activities/{eid}').text
+    assert 'Encore mieux après coup.' in page and '★' in page
+    past = app.test_client().get('/activities?when=past&sort=rating').text
+    assert past.index('Notée haut') < past.index('Notée bas') or 'Notée bas' not in past
+    login(app, 'stranger@example.test').post(f'/activities/{other}/avis', data={'rating': '2', 'comment': 'Correct sans plus.'})
+    ordered = app.test_client().get('/activities?when=past&sort=rating').text
+    assert ordered.index('Notée haut') < ordered.index('Notée bas')
+    admin = login(app, 'admin@example.test')
+    review_id = db.execute('SELECT id FROM reviews WHERE author_id=%s', (guest_id,)).fetchone()['id']
+    assert admin.post(f'/admin/reviews/{review_id}', data={'hidden': 'on'}).status_code == 302
+    hidden = app.test_client().get(f'/activities/{eid}').text
+    assert 'Encore mieux après coup.' not in hidden
+    assert 'Masqué' in guest.get(f'/activities/{eid}').text
+    assert db.execute(
+        'SELECT rating_count FROM (SELECT (SELECT count(*) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_count FROM events e WHERE e.id=%s) s',
+        (eid,),
+    ).fetchone()['rating_count'] == 0

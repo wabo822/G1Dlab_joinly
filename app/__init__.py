@@ -310,7 +310,9 @@ def create_app(config=None):
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
-        e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available
+        e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available,
+        (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_avg,
+        (SELECT count(*) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_count
         FROM events e JOIN users u ON u.id=e.organizer_id LEFT JOIN categories c ON c.id=e.category_id'''
 
     def ranked_events(limit=30):
@@ -418,6 +420,7 @@ def create_app(config=None):
         orders = {
             'date': 'e.starts_at DESC, e.id DESC' if when == 'past' else 'e.starts_at ASC, e.id ASC',
             'popularity': "(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') DESC, e.starts_at ASC, e.id ASC",
+            'rating': 'rating_avg DESC NULLS LAST, rating_count DESC, e.starts_at ASC, e.id ASC',
             'price': 'e.price_cents ASC, e.starts_at ASC, e.id ASC',
         }
         if sort not in orders:
@@ -479,7 +482,49 @@ def create_app(config=None):
             db().execute('UPDATE events SET view_count=view_count+1 WHERE id=%s', (event_id,))
             event['view_count'] += 1
         booking = query("SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'", (event_id, g.user['id']), True) if g.user else None
-        return render_template('detail.html', event=event, booking=booking)
+        reviews = query(
+            '''SELECT rv.*, u.display_name FROM reviews rv JOIN users u ON u.id=rv.author_id
+               WHERE rv.event_id=%s AND (NOT rv.hidden OR rv.author_id=%s)
+               ORDER BY rv.created_at DESC''',
+            (event_id, g.user['id'] if g.user else 0),
+        )
+        mine = next((row for row in reviews if g.user and row['author_id'] == g.user['id']), None)
+        can_review = bool(booking and event['status'] == 'published' and is_finished(event))
+        return render_template('detail.html', event=event, booking=booking, reviews=reviews, mine=mine, can_review=can_review)
+
+    @app.post('/activities/<int:event_id>/avis')
+    @require()
+    def review(event_id):
+        event = query('SELECT * FROM events WHERE id=%s', (event_id,), True)
+        if not event or event['status'] != 'published':
+            abort(404)
+        if not is_finished(event):
+            raise ValueError('Vous pourrez laisser un avis une fois l’activité terminée.')
+        booking = query(
+            "SELECT id FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'",
+            (event_id, g.user['id']),
+            True,
+        )
+        if not booking:
+            raise ValueError('Seules les personnes dont l’inscription est confirmée peuvent laisser un avis.')
+        try:
+            rating = int(request.form.get('rating', ''))
+        except ValueError:
+            rating = 0
+        comment = request.form.get('comment', '').strip()
+        if rating not in range(1, 6) or not 1 <= len(comment) <= 2000:
+            raise ValueError('Choisissez une note de 1 à 5 et un commentaire (2 000 caractères maximum).')
+        existing = query('SELECT id FROM reviews WHERE event_id=%s AND author_id=%s', (event_id, g.user['id']), True)
+        if existing:
+            db().execute('UPDATE reviews SET rating=%s, comment=%s WHERE id=%s', (rating, comment, existing['id']))
+            flash('Avis mis à jour.', 'success')
+        else:
+            db().execute(
+                'INSERT INTO reviews(event_id, author_id, rating, comment) VALUES (%s, %s, %s, %s)',
+                (event_id, g.user['id'], rating, comment),
+            )
+            flash('Merci, votre avis est publié.', 'success')
+        return redirect(url_for('detail', event_id=event_id))
 
     @app.route('/signup', methods=['GET', 'POST'])
     def signup():
@@ -803,7 +848,10 @@ def create_app(config=None):
             pages=query('SELECT * FROM legal_pages ORDER BY kind,version DESC'), messages=query('SELECT * FROM contact_requests ORDER BY created_at DESC'),
             priced_events=query('''SELECT e.id, e.title, e.price_cents, e.starts_at, u.display_name AS organizer
                 FROM events e JOIN users u ON u.id=e.organizer_id
-                WHERE e.status <> 'cancelled' ORDER BY e.starts_at DESC LIMIT 40'''))
+                WHERE e.status <> 'cancelled' ORDER BY e.starts_at DESC LIMIT 40'''),
+            reviews=query('''SELECT rv.*, u.display_name, e.title FROM reviews rv
+                JOIN users u ON u.id=rv.author_id JOIN events e ON e.id=rv.event_id
+                ORDER BY rv.created_at DESC LIMIT 40'''))
 
     @app.post('/admin/events/<int:event_id>/price')
     @require('admin')
@@ -833,6 +881,15 @@ def create_app(config=None):
         db().execute('UPDATE events SET starts_at=%s, ends_at=%s WHERE id=%s', (starts, ends, event_id))
         flash('Dates corrigées.', 'success')
         return redirect(url_for('detail', event_id=event_id))
+
+    @app.post('/admin/reviews/<int:review_id>')
+    @require('admin')
+    def admin_review(review_id):
+        if not query('SELECT id FROM reviews WHERE id=%s', (review_id,), True):
+            abort(404)
+        db().execute('UPDATE reviews SET hidden=%s WHERE id=%s', ('hidden' in request.form, review_id))
+        flash('Avis modéré.', 'success')
+        return redirect(url_for('admin') + '#avis')
 
     @app.post('/admin/users/<int:user_id>')
     @require('admin')

@@ -271,12 +271,53 @@ def _preferences(conn, user_id, index, categories):
     )
 
 
+def _seed_reviews(conn, event_id, title, stats):
+    row = conn.execute('SELECT status, ends_at FROM events WHERE id=%s', (event_id,)).fetchone()
+    if not row or row['status'] != 'published' or row['ends_at'] > datetime.now(PARIS):
+        return
+    attendees = conn.execute(
+        '''SELECT r.member_id FROM reservations r
+           JOIN users u ON u.id = r.member_id
+           WHERE r.event_id=%s AND r.status='confirmed' AND u.email LIKE %s''',
+        (event_id, f'%@{DEMO_DOMAIN}'),
+    ).fetchall()
+    notes = (5, 5, 4, 4, 4, 3, 5, 3, 2, 4)
+    comments = (
+        'Très belle ambiance, j’y retournerai avec plaisir.',
+        'Groupe bienveillant et rythme adapté aux débutants.',
+        'Un peu court à mon goût, mais l’accueil était chaleureux.',
+        'Lieu facile à trouver, consignes claires dès le début.',
+        'J’ai rencontré des personnes vraiment sympathiques.',
+        'Organisation simple et efficace, sans temps mort.',
+        'Le thème annoncé correspondait bien à ce qui a été fait.',
+        'Sortie conviviale, parfaite pour venir seul.',
+        'J’ai appris deux ou trois choses sans me sentir perdu.',
+        'Cadre agréable et groupe à taille humaine.',
+        'Je recommande, surtout si l’on aime les activités tranquilles.',
+        'Bonne humeur générale, je me suis senti à l’aise.',
+        'Intéressant, même si le vent a un peu compliqué la fin.',
+        'Une parenthèse réussie dans la semaine.',
+        'On est repartis avec l’envie de revenir.',
+    )
+    for attendee in attendees:
+        digest = hashlib.sha256(f'{title}:{attendee["member_id"]}'.encode()).digest()
+        inserted = conn.execute(
+            '''INSERT INTO reviews(event_id, author_id, rating, comment)
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (event_id, author_id) DO NOTHING RETURNING id''',
+            (event_id, attendee['member_id'], notes[digest[0] % len(notes)], comments[digest[1] % len(comments)]),
+        ).fetchone()
+        if inserted:
+            stats['reviews_created'] += 1
+
+
 def seed_demo(conn):
     """Insert demo reference data. Requires a dict_row connection and migration 004."""
     stats = {
         'users_created': 0,
         'events_created': 0,
         'bookings_created': 0,
+        'reviews_created': 0,
         'faqs_created': 0,
         'legal_published': [],
     }
@@ -377,6 +418,7 @@ def seed_demo(conn):
                 )
                 confirmed.add(member_id)
                 stats['bookings_created'] += 1
+            _seed_reviews(conn, event_id, title, stats)
 
         stats['demo_users'] = conn.execute(
             'SELECT count(*) AS n FROM users WHERE email LIKE %s',

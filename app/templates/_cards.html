@@ -13,6 +13,9 @@
 <div class="meta">
 <span>{{ event.category or 'Activité' }}</span>
 <span class="{{ 'price-free' if not event.price_cents else 'price-paid' }}">{{ event.price_cents|pricefr }}</span>
+{% if event.rating_count %}
+<span>{{ event.rating_avg }} ★ · {{ event.rating_count }}</span>
+{% endif %}
 </div>
 {% if event.status == 'cancelled' %}
 <p><span class="badge badge-cancelled">Annulée</span></p>
