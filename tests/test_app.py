@@ -912,3 +912,34 @@ def test_notifications_mail_and_reminders(app, db, monkeypatch):
     monkeypatch.setattr('app.notify.smtplib.SMTP', Boom)
     other = event(db, owner, 4)
     assert client.post(f'/activities/{other}/reserve').status_code == 302
+
+
+def test_tickets_check_in_once_and_reject_the_wrong_organizer(app, db):
+    owner = user(db, 'owner@example.test', roles=('member', 'organizer'))
+    other = user(db, 'other-org@example.test', roles=('member', 'organizer'))
+    guest = user(db, 'guest@example.test')
+    eid = event(db, owner, 4)
+    client = login(app, 'guest@example.test')
+    assert client.post(f'/activities/{eid}/reserve').status_code == 302
+    ticket = db.execute(
+        '''SELECT t.id, t.code, t.token FROM tickets t JOIN reservations r ON r.id=t.reservation_id
+           WHERE r.member_id=%s AND r.event_id=%s''',
+        (guest, eid),
+    ).fetchone()
+    assert ticket['code'].startswith('JOIN-')
+    assert client.get('/account/billets').status_code == 200
+    assert ticket['code'] in client.get('/account/billets').text
+    qr = client.get(f'/billets/{ticket["id"]}/qr.png')
+    assert qr.status_code == 200 and qr.data.startswith(b'\x89PNG')
+    assert login(app, 'other-org@example.test').get(f'/organizer/{eid}/controle').status_code == 403
+    door = login(app, 'owner@example.test')
+    ok = door.post(f'/organizer/{eid}/controle', data={'code': ticket['code']})
+    assert ok.status_code == 200 and 'Entrée enregistrée' in ok.text
+    again = door.post(f'/organizer/{eid}/controle', data={'code': ticket['token']})
+    assert 'Déjà contrôlé' in again.text
+    assert door.post(f'/organizer/{eid}/controle', data={'undo': '1', 'ticket_id': str(ticket['id'])}).status_code == 302
+    assert 'Contrôlé' in door.get(f'/organizer/{eid}/participants').text or 'contrôlée' in door.get(f'/organizer/{eid}/participants').text.lower()
+    client.post(f'/reservations/{db.execute("SELECT id FROM reservations WHERE member_id=%s AND event_id=%s", (guest, eid)).fetchone()["id"]}/cancel')
+    cancelled = door.post(f'/organizer/{eid}/controle', data={'code': ticket['code']})
+    assert 'Billet annulé' in cancelled.text
+    assert 'Billet inconnu' in door.post(f'/organizer/{eid}/controle', data={'code': 'JOIN-XXXX-YY'}).text

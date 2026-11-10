@@ -7,10 +7,11 @@
 <p class="eyebrow">INSCRIPTIONS</p>
 <h1>Participants</h1>
 <h2>{{ event.title }}</h2>
-<p>{{ people|length }} inscription{{ 's' if people|length != 1 else '' }} confirmée{{ 's' if people|length != 1 else '' }} sur {{ event.capacity }} places. Les adresses e-mail ne sont pas affichées.</p>
+<p>{{ people|length }} inscription{{ 's' if people|length != 1 else '' }} confirmée{{ 's' if people|length != 1 else '' }} sur {{ event.capacity }} places. {{ checked }} contrôlée{{ 's' if checked != 1 else '' }}. Les adresses e-mail ne sont pas affichées.</p>
+<p><a href="{{ url_for('checkin', event_id=event.id) }}">Contrôle des billets</a></p>
 <div class="panel">
 {% for p in people %}
-<p class="participant"><strong>{{ p.display_name }}</strong> <span class="muted">· Inscription le {{ p.reserved_at|datefr }}</span></p>
+<p class="participant"><strong>{{ p.display_name }}</strong> <span class="muted">· Inscription le {{ p.reserved_at|datefr }}{% if p.checked_in_at %} · Contrôlé le {{ p.checked_in_at|datefr }}{% else %} · Pas encore contrôlé{% endif %}</span></p>
 {% else %}
 <div class="empty">
 <h3>Aucune inscription confirmée.</h3>

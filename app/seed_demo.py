@@ -14,6 +14,7 @@ from werkzeug.security import generate_password_hash
 from zoneinfo import ZoneInfo
 
 from app.legal_content import ensure_faqs, publish_legal_defaults
+from app.tickets import issue_ticket
 
 PARIS = ZoneInfo('Europe/Paris')
 DEMO_DOMAIN = 'demo.joinly.fr'
@@ -365,6 +366,20 @@ def _seed_reviews(conn, event_id, title, stats):
             stats['reviews_created'] += 1
 
 
+def _seed_tickets(conn, event_id, organizer_id):
+    event = conn.execute('SELECT status, ends_at FROM events WHERE id=%s', (event_id,)).fetchone()
+    rows = conn.execute('SELECT id, status FROM reservations WHERE event_id=%s', (event_id,)).fetchall()
+    for row in rows:
+        ticket = issue_ticket(conn, row['id'])
+        past = event and event['status'] == 'published' and event['ends_at'] <= datetime.now(PARIS)
+        if past and row['status'] == 'confirmed' and hashlib.sha256(str(row['id']).encode()).digest()[0] % 3 == 0:
+            conn.execute(
+                '''UPDATE tickets SET checked_in_at=COALESCE(checked_in_at, now()),
+                   checked_in_by=COALESCE(checked_in_by, %s) WHERE id=%s''',
+                (organizer_id, ticket['id']),
+            )
+
+
 def _seed_social(conn, organizer_ids, member_ids, stats):
     for index, member_id in enumerate(member_ids):
         targets = []
@@ -489,10 +504,12 @@ def seed_demo(conn):
                         (member_id, event_id),
                     )
                     stats['bookings_created'] += 1
+                _seed_tickets(conn, event_id, organizer_id)
                 continue
 
             target = _fill_target(title, capacity, status)
             if not target:
+                _seed_tickets(conn, event_id, organizer_id)
                 continue
             confirmed = {
                 row['member_id']
@@ -513,6 +530,7 @@ def seed_demo(conn):
                 confirmed.add(member_id)
                 stats['bookings_created'] += 1
             _seed_reviews(conn, event_id, title, stats)
+            _seed_tickets(conn, event_id, organizer_id)
         _seed_social(conn, organizer_ids, member_ids, stats)
 
         stats['demo_users'] = conn.execute(
