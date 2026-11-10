@@ -24,7 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
-from app.lifecycle import booking_block, is_finished
+from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
 from app import covers, notify
 from app.tickets import issue_ticket, payload_for, qr_png
 
@@ -324,6 +324,8 @@ def create_app(config=None):
                 'SELECT count(*) AS n FROM notifications WHERE user_id=%s AND read_at IS NULL',
                 (g.user['id'],), True,
             )['n'] if getattr(g, 'user', None) else 0,
+            'policy_labels': POLICY_LABELS,
+            'refund_preview': refund_cents,
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, c.name AS category, c.icon AS category_icon,
@@ -761,7 +763,8 @@ def create_app(config=None):
             flash('Profil enregistré.', 'success')
             return redirect(url_for('account'))
         prefs = query('SELECT * FROM member_preferences WHERE user_id=%s', (g.user['id'],), True)
-        bookings = query('''SELECT r.*, e.title, e.starts_at, e.ends_at, e.location, e.status AS event_status
+        bookings = query('''SELECT r.*, e.title, e.starts_at, e.ends_at, e.location, e.status AS event_status,
+            e.price_cents, e.cancellation_policy
             FROM reservations r JOIN events e ON e.id=r.event_id
             WHERE r.member_id=%s ORDER BY e.starts_at DESC''', (g.user['id'],))
         moment = datetime.now(timezone.utc)
@@ -863,8 +866,28 @@ def create_app(config=None):
             event = query('SELECT * FROM events WHERE id=%s FOR UPDATE', (booking['event_id'],), True)
             if event['starts_at'] <= datetime.now(timezone.utc):
                 raise ValueError('Cette activité a déjà commencé.')
-            db().execute("UPDATE reservations SET status='cancelled',cancelled_at=clock_timestamp() WHERE id=%s AND status='confirmed'", (booking_id,))
-        flash('Réservation annulée.', 'success')
+            cents = refund_cents(event)
+            db().execute(
+                '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+                   refund_cents=%s, refund_status=%s,
+                   refunded_at=CASE WHEN %s > 0 THEN clock_timestamp() ELSE NULL END
+                   WHERE id=%s AND status='confirmed' ''',
+                (cents, 'simulated' if cents else 'none', cents, booking_id),
+            )
+        euros = f'{cents // 100},{cents % 100:02d} €'
+        notify.notify(
+            app, query, g.user['id'], 'event_cancelled', 'Réservation annulée',
+            f'Votre inscription à « {event["title"]} » est annulée. Remboursement simulé : {euros}.',
+            '/account/billets', dedupe_key=f'refund:{booking_id}', email=g.user['email'],
+        )
+        organizer = query('SELECT id, email FROM users WHERE id=%s', (event['organizer_id'],), True)
+        if organizer and organizer['id'] != g.user['id']:
+            notify.notify(
+                app, query, organizer['id'], 'event_changed', 'Une inscription a été annulée',
+                f'{g.user["display_name"]} a annulé sa place pour « {event["title"]} ». Remboursement simulé : {euros}.',
+                f'/organizer/{event["id"]}/participants', email=organizer['email'],
+            )
+        flash(f'Réservation annulée. Remboursement simulé : {euros}.', 'success')
         return redirect(url_for('account'))
 
     @app.get('/organizer')
@@ -910,6 +933,11 @@ def create_app(config=None):
                     raise ValueError('Coordonnées hors limites.')
                 payload['latitude'] = latitude
                 payload['longitude'] = longitude
+        if 'cancellation_policy' in request.form:
+            policy = request.form.get('cancellation_policy') or 'flexible'
+            if policy not in POLICY_LABELS:
+                raise ValueError('Politique d’annulation invalide.')
+            payload['cancellation_policy'] = policy
         return payload
 
     @app.route('/organizer/new', methods=['GET', 'POST'])
@@ -1000,16 +1028,26 @@ def create_app(config=None):
             if event['starts_at'] <= datetime.now(timezone.utc):
                 raise ValueError('Cette activité a déjà commencé.')
             people = query(
-                '''SELECT u.id, u.email FROM reservations r JOIN users u ON u.id=r.member_id
+                '''SELECT u.id, u.email, e.price_cents FROM reservations r
+                   JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id
                    WHERE r.event_id=%s AND r.status='confirmed' ''',
                 (event_id,),
             )
             db().execute("UPDATE events SET status='cancelled' WHERE id=%s", (event_id,))
-            db().execute("UPDATE reservations SET status='cancelled',cancelled_at=clock_timestamp() WHERE event_id=%s AND status='confirmed'", (event_id,))
+            for person in people:
+                cents = int(person['price_cents'] or 0)
+                db().execute(
+                    '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+                       refund_cents=%s, refund_status=%s,
+                       refunded_at=CASE WHEN %s > 0 THEN clock_timestamp() ELSE NULL END
+                       WHERE member_id=%s AND event_id=%s AND status='confirmed' ''',
+                    (cents, 'simulated' if cents else 'none', cents, person['id'], event_id),
+                )
         for person in people:
+            euros = f'{int(person["price_cents"] or 0) // 100},{int(person["price_cents"] or 0) % 100:02d} €'
             notify.notify(
                 app, query, person['id'], 'event_cancelled', 'Activité annulée',
-                f'« {event["title"]} » est annulée. Votre inscription ne tient plus.',
+                f'« {event["title"]} » est annulée. Remboursement simulé : {euros}. Votre billet n’est plus valable.',
                 f'/activities/{event_id}', dedupe_key=f'cancelled:{event_id}:{person["id"]}', email=person['email'],
             )
         flash('Activité et inscriptions annulées.', 'success')
@@ -1239,7 +1277,10 @@ def create_app(config=None):
                 WHERE e.status <> 'cancelled' ORDER BY e.starts_at DESC LIMIT 40'''),
             reviews=query('''SELECT rv.*, u.display_name, e.title FROM reviews rv
                 JOIN users u ON u.id=rv.author_id JOIN events e ON e.id=rv.event_id
-                ORDER BY rv.created_at DESC LIMIT 40'''))
+                ORDER BY rv.created_at DESC LIMIT 40'''),
+            refundable=query('''SELECT r.id, u.display_name, e.title, e.price_cents, r.refund_cents, r.refund_status
+                FROM reservations r JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id
+                WHERE e.price_cents > 0 ORDER BY r.reserved_at DESC LIMIT 20'''))
 
     @app.post('/admin/events/<int:event_id>/price')
     @require('admin')
@@ -1250,6 +1291,34 @@ def create_app(config=None):
         db().execute('UPDATE events SET price_cents=%s WHERE id=%s', (cents, event_id))
         flash('Prix mis à jour.', 'success')
         return redirect(url_for('admin') + '#tarifs')
+
+    @app.post('/admin/reservations/<int:booking_id>/remboursement')
+    @require('admin')
+    def admin_manual_refund(booking_id):
+        if request.form.get('confirm') != '1':
+            raise ValueError('Confirmez le remboursement simulé.')
+        cents = money_cents('refund')
+        booking = query(
+            '''SELECT r.id, e.price_cents FROM reservations r JOIN events e ON e.id=r.event_id WHERE r.id=%s''',
+            (booking_id,), True,
+        )
+        if not booking:
+            abort(404)
+        if cents > int(booking['price_cents'] or 0):
+            raise ValueError('Le remboursement ne peut pas dépasser le prix.')
+        if cents == 0:
+            db().execute(
+                "UPDATE reservations SET refund_cents=0, refund_status='none', refunded_at=NULL WHERE id=%s",
+                (booking_id,),
+            )
+        else:
+            db().execute(
+                '''UPDATE reservations SET refund_cents=%s, refund_status='manual', refunded_at=clock_timestamp()
+                   WHERE id=%s''',
+                (cents, booking_id),
+            )
+        flash('Remboursement simulé enregistré.', 'success')
+        return redirect(url_for('admin') + '#remboursements')
 
     @app.post('/admin/events/<int:event_id>/dates')
     @require('admin')

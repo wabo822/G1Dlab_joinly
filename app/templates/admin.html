@@ -122,5 +122,19 @@
 {% else %}
 <p class="muted">Aucun avis pour le moment.</p>
 {% endfor %}
+<h2 id="remboursements">Remboursements simulés</h2>
+<p>Un remboursement manuel est enregistré sans encaissement réel. Cochez la confirmation.</p>
+{% for row in refundable %}
+<form class="panel stack" method="post" action="{{ url_for('admin_manual_refund', booking_id=row.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<strong>{{ row.title }}</strong>
+<span>{{ row.display_name }} · payé {{ row.price_cents|pricefr }} · déjà {{ row.refund_cents|pricefr }} ({{ row.refund_status }})</span>
+<label>Montant en euros<input name="refund" inputmode="decimal" value="0,00" required></label>
+<label class="check"><input type="checkbox" name="confirm" value="1">Je confirme ce remboursement simulé</label>
+<button class="secondary small">Enregistrer</button>
+</form>
+{% else %}
+<p class="muted">Aucune réservation payante.</p>
+{% endfor %}
 </section>
 {% endblock %}

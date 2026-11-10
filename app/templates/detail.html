@@ -48,6 +48,8 @@
 <dd>{{ event.location }}</dd>
 <dt>Tarif</dt>
 <dd>{{ event.price_cents|pricefr }}</dd>
+<dt>Annulation</dt>
+<dd>{{ policy_labels.get(event.cancellation_policy, '') }}</dd>
 <dt>Places restantes</dt>
 <dd>{{ event.available if event.available > 0 else 0 }} / {{ event.capacity }}</dd>
 </dl>

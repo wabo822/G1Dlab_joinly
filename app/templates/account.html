@@ -17,6 +17,7 @@
 </h3>
 <p>{{ b.starts_at|datefr }} · {{ b.location }}</p>
 {% if b.status=='confirmed' and b.starts_at>now %}
+<p class="muted">Remboursement simulé si vous annulez maintenant : {{ refund_preview(b)|pricefr }}.</p>
 <form method="post" action="{{ url_for('cancel_booking',booking_id=b.id) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <button class="secondary small">Annuler ma réservation</button>

@@ -485,9 +485,11 @@ def seed_demo(conn):
                 ).fetchone()['id']
                 stats['events_created'] += 1
             latitude, longitude = COORDS.get(title, (None, None))
+            policy = ('flexible', 'moderate', 'strict')[hashlib.sha256(title.encode()).digest()[0] % 3]
             conn.execute(
-                'UPDATE events SET price_cents=%s, city=%s, latitude=%s, longitude=%s WHERE id=%s',
-                (PAID_PRICES.get(title, 0), _city(location), latitude, longitude, event_id),
+                '''UPDATE events SET price_cents=%s, city=%s, latitude=%s, longitude=%s, cancellation_policy=%s
+                   WHERE id=%s''',
+                (PAID_PRICES.get(title, 0), _city(location), latitude, longitude, policy, event_id),
             )
 
             if status == 'cancelled':

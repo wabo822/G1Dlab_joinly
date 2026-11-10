@@ -13,6 +13,8 @@
 <dl>
 <dt>Tarif</dt>
 <dd>{{ event.price_cents|pricefr }}</dd>
+<dt>Annulation</dt>
+<dd>{{ policy_labels.get(event.cancellation_policy, '') }}</dd>
 <dt>Début</dt>
 <dd>{{ event.starts_at|datefr }}</dd>
 <dt>Lieu</dt>
