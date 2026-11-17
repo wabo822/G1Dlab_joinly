@@ -51,5 +51,5 @@ ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_refund_status_ch
 ALTER TABLE reservations ADD CONSTRAINT reservations_refund_status_check
     CHECK (refund_status IN ('none', 'simulated', 'manual', 'stripe'));
 
-INSERT INTO schema_migrations (version) VALUES ('017_stripe_payments');
+INSERT INTO schema_migrations (version) VALUES ('020_stripe_payments');
 COMMIT;

@@ -98,11 +98,14 @@ L’espace `/admin` est réservé au rôle `admin`. Le tableau de bord affiche l
 - Journal d’audit.
 - Réglages : nom du site, bandeau, délai de clôture des inscriptions, politique d’annulation par défaut, poids du classement, activités épinglées.
 
+### Assistant et MCP
+
+Un widget en bas des pages appelle DeepSeek lorsque `DEEPSEEK_API_KEY` est défini. `DEEPSEEK_MODEL` choisit le modèle. Le membre crée un jeton MCP dans Mon espace. L’assistant prépare une réservation ; la place n’existe qu’après confirmation sur Joinly. Voir `docs/chatbot.md` et `docs/mcp.md`.
+
 ### Hors de cette version
 
 Ces sujets figurent dans le [cahier des charges](docs/cahier-des-charges-joinly.md) ou dans la [recette](docs/recette-v1.md) comme non livrés. Aucun code ne les réalise :
 
-- assistant conversationnel et appels à un modèle d’IA (le consentement est seulement enregistré) ;
 - messagerie interne et forum ;
 - encaissement hors mode test (une clé Stripe live est refusée) ;
 - interface multilingue ;
@@ -177,7 +180,7 @@ G1Dlab_joinly/
 │   ├── static/                  # CSS, JS, couvertures, favicon
 │   └── fonts/                   # Source Sans 3
 ├── database/
-│   ├── migrations/              # 001_initial.sql … 017_stripe_payments.sql
+│   ├── migrations/              # 001_initial.sql … 020_stripe_payments.sql
 │   ├── scripts/setup-local.py   # Création de la base locale
 │   └── tests/constraints.sql
 ├── deploy/                      # Unités systemd, minuteur, exemple Nginx
@@ -190,7 +193,7 @@ G1Dlab_joinly/
 └── .env.example                 # Noms des variables, sans secret
 ```
 
-Migrations, dans l’ordre : schéma initial et rôles ; sessions, contact et limites de débit ; pages de confidentialité ; centres d’intérêt et prix ; ville ; avis ; favoris et abonnements ; couvertures ; coordonnées ; notifications ; confirmation d’adresse ; billets ; annulations et remboursements simulés ; connexion Google ; administration ; avatars ; paiements Stripe en mode test (devise EUR, statut, session Checkout, intention de paiement, montant).
+Migrations, dans l’ordre : schéma initial et rôles ; sessions, contact et limites de débit ; pages de confidentialité ; centres d’intérêt et prix ; ville ; avis ; favoris et abonnements ; couvertures ; coordonnées ; notifications ; confirmation d’adresse ; billets ; annulations et remboursements simulés ; connexion Google ; administration ; avatars ; confidentialité de l’assistant (`017_assistant_privacy`) ; jetons MCP (`018_mcp`) ; confidentialité MCP (`019_mcp_privacy`) ; paiements Stripe en mode test (`020_stripe_payments` : devise EUR, statut, session Checkout, intention de paiement, montant).
 
 ## Installation locale
 
@@ -268,6 +271,8 @@ Les noms ci-dessous sont ceux lus par l’application, par libpq ou par les scri
 | `TRUST_PROXY` | `1` seulement derrière le reverse proxy local de confiance. Un seul saut est lu pour l’adresse et le protocole. |
 | `TRUSTED_HOSTS` | Hôtes autorisés, séparés par des virgules. |
 | `UNSPLASH_ACCESS_KEY` | Clé lue uniquement par `scripts/fetch_unsplash_covers.py`. L’application web ne l’utilise pas. |
+| `DEEPSEEK_API_KEY` | Clé serveur de l’assistant. Sans elle, le chat répond qu’il est indisponible. |
+| `DEEPSEEK_MODEL` | Nom du modèle DeepSeek. |
 | `STRIPE_SECRET_KEY` | Clé secrète Stripe. Seule une valeur qui commence par `sk_test_` autorise un paiement. |
 | `STRIPE_PUBLISHABLE_KEY` | Clé publiable Stripe, lue avec les deux autres. Le paiement redirige vers Checkout : la page Joinly ne charge pas Stripe.js. |
 | `STRIPE_WEBHOOK_SECRET` | Secret de signature du webhook `checkout.session.completed`. |
