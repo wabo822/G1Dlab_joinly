@@ -98,11 +98,14 @@ Joinly 把这些步骤放进同一个应用：
 - 审计日志。
 - 设置：站点名称、横幅、报名截止时间、默认取消政策、排行权重、置顶活动。
 
+### 助手与 MCP
+
+页面底部的小组件在设置了 `DEEPSEEK_API_KEY` 时调用 DeepSeek。`DEEPSEEK_MODEL` 选择模型。成员可以在个人空间创建 MCP 令牌。助手只准备预订，席位要在 Joinly 上确认之后才存在。见 `docs/chatbot.md` 和 `docs/mcp.md`。
+
 ### 本版本未包含
 
 下列内容在[需求说明](docs/cahier-des-charges-joinly.md)或[验收记录](docs/recette-v1.md)中标明为未交付，代码中也没有对应实现：
 
-- 对话助手，以及对人工智能模型的调用（只保存同意与否）；
 - 站内私信和论坛；
 - 测试模式以外的收款（Stripe 正式密钥会被拒绝）；
 - 多语言界面；
@@ -177,7 +180,7 @@ G1Dlab_joinly/
 │   ├── static/                  # CSS、JS、封面、网站图标
 │   └── fonts/                   # Source Sans 3
 ├── database/
-│   ├── migrations/              # 001_initial.sql … 017_stripe_payments.sql
+│   ├── migrations/              # 001_initial.sql … 020_stripe_payments.sql
 │   ├── scripts/setup-local.py   # 创建本地数据库
 │   └── tests/constraints.sql
 ├── deploy/                      # systemd 单元、定时器、Nginx 示例
@@ -190,7 +193,7 @@ G1Dlab_joinly/
 └── .env.example                 # 变量名，不含密钥
 ```
 
-迁移顺序：初始结构与角色；会话、联系和速率限制；隐私页面；兴趣与价格；城市；评价；收藏与关注；封面；坐标；通知；邮箱确认；票据；取消与模拟退款；Google 登录；管理功能；头像；Stripe 测试模式支付（欧元、状态、Checkout 会话、支付意向、金额）。
+迁移顺序：初始结构与角色；会话、联系和速率限制；隐私页面；兴趣与价格；城市；评价；收藏与关注；封面；坐标；通知；邮箱确认；票据；取消与模拟退款；Google 登录；管理功能；头像；助手隐私（`017_assistant_privacy`）；MCP 令牌（`018_mcp`）；MCP 隐私（`019_mcp_privacy`）；Stripe 测试模式支付（`020_stripe_payments`：欧元、状态、Checkout 会话、支付意向、金额）。
 
 ## 本地安装
 
@@ -268,6 +271,8 @@ python3 -c 'import secrets; print(secrets.token_hex(32))'
 | `TRUST_PROXY` | 仅在可信的本地反向代理之后设为 `1`。地址和协议只信任一跳。 |
 | `TRUSTED_HOSTS` | 允许的主机名，逗号分隔。 |
 | `UNSPLASH_ACCESS_KEY` | 仅 `scripts/fetch_unsplash_covers.py` 读取。Web 应用不使用它。 |
+| `DEEPSEEK_API_KEY` | 助手的服务器密钥。未设置时，聊天回复不可用。 |
+| `DEEPSEEK_MODEL` | DeepSeek 模型名称。 |
 | `STRIPE_SECRET_KEY` | Stripe 密钥。只有以 `sk_test_` 开头的值才能发起支付。 |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe 可发布密钥，与另外两项一起读取。支付通过跳转完成，Joinly 页面不加载 Stripe.js。 |
 | `STRIPE_WEBHOOK_SECRET` | `checkout.session.completed` webhook 的签名密钥。 |

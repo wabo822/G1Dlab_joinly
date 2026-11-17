@@ -78,10 +78,12 @@ La migration `002_web` ajoute sessions, demandes de contact, limites de débit e
 jetons de réinitialisation. La migration `003_privacy` autorise le type
 `privacy` dans `legal_pages`. La migration `004_interests_pricing` ajoute
 `categories.icon`, la table `user_interests`, `events.price_cents` (0 = gratuit)
-et `events.view_count`. La migration `017_stripe_payments` fixe la devise EUR
-et ajoute le statut de paiement, la session Checkout, l’intention de paiement
-et le montant sur `reservations`. Seul le mode test Stripe est branché.
-L’historique IA reste hors schéma.
+et `events.view_count`. Les migrations `017_assistant_privacy`, `018_mcp` et
+`019_mcp_privacy` ajoutent le texte de confidentialité de l’assistant, les jetons
+MCP et les propositions de réservation. La migration `020_stripe_payments` fixe
+la devise EUR et ajoute le statut de paiement, la session Checkout, l’intention
+de paiement et le montant sur `reservations`. Seul le mode test Stripe est branché.
+L’historique des conversations reste hors schéma.
 
 ## Vérification et migrations
 

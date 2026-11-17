@@ -98,11 +98,14 @@ Roles are `member`, `organizer` and `admin`. They can be combined. Public sign-u
 - Audit log.
 - Settings: site name, banner, booking cut-off, default cancellation policy, ranking weights, pinned activities.
 
+### Assistant and MCP
+
+A widget at the bottom of each page calls DeepSeek when `DEEPSEEK_API_KEY` is set. `DEEPSEEK_MODEL` selects the model. A member creates an MCP token from their account. The assistant prepares a booking; the seat exists only after confirmation on Joinly. See `docs/chatbot.md` and `docs/mcp.md`.
+
 ### Not in this version
 
 The [requirements document](docs/cahier-des-charges-joinly.md) and the [acceptance notes](docs/recette-v1.md) list the following as not delivered. No code implements them:
 
-- a conversational assistant and calls to an AI model (consent is only stored);
 - internal messaging and a forum;
 - charges outside test mode (a live Stripe key is refused);
 - a multilingual interface;
@@ -177,7 +180,7 @@ G1Dlab_joinly/
 │   ├── static/                  # CSS, JS, covers, favicon
 │   └── fonts/                   # Source Sans 3
 ├── database/
-│   ├── migrations/              # 001_initial.sql … 017_stripe_payments.sql
+│   ├── migrations/              # 001_initial.sql … 020_stripe_payments.sql
 │   ├── scripts/setup-local.py   # Local database creation
 │   └── tests/constraints.sql
 ├── deploy/                      # systemd units, timer, Nginx example
@@ -190,7 +193,7 @@ G1Dlab_joinly/
 └── .env.example                 # Variable names, no secrets
 ```
 
-Migrations, in order: initial schema and roles; sessions, contact and rate limits; privacy pages; interests and prices; city; reviews; favourites and follows; covers; coordinates; notifications; e-mail confirmation; tickets; cancellations and simulated refunds; Google sign-in; administration; avatars; Stripe test-mode payments (EUR, status, Checkout session, payment intent, amount).
+Migrations, in order: initial schema and roles; sessions, contact and rate limits; privacy pages; interests and prices; city; reviews; favourites and follows; covers; coordinates; notifications; e-mail confirmation; tickets; cancellations and simulated refunds; Google sign-in; administration; avatars; assistant privacy (`017_assistant_privacy`); MCP tokens (`018_mcp`); MCP privacy (`019_mcp_privacy`); Stripe test-mode payments (`020_stripe_payments`: EUR, status, Checkout session, payment intent, amount).
 
 ## Local setup
 
@@ -268,6 +271,8 @@ The names below are those read by the application, by libpq, or by the scripts. 
 | `TRUST_PROXY` | `1` only behind the trusted local reverse proxy. One hop is trusted for the address and the protocol. |
 | `TRUSTED_HOSTS` | Allowed hosts, comma-separated. |
 | `UNSPLASH_ACCESS_KEY` | Key read only by `scripts/fetch_unsplash_covers.py`. The web application does not use it. |
+| `DEEPSEEK_API_KEY` | Server key for the assistant. Without it, the chat reports that it is unavailable. |
+| `DEEPSEEK_MODEL` | DeepSeek model name. |
 | `STRIPE_SECRET_KEY` | Stripe secret key. Only a value that starts with `sk_test_` can start a payment. |
 | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key, read with the other two. Checkout is a redirect: Joinly pages do not load Stripe.js. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for the `checkout.session.completed` webhook. |
