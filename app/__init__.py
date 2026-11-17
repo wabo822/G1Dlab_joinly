@@ -26,7 +26,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.legal_content import LEGAL_TEXTS
 from app.lifecycle import POLICY_LABELS, booking_block, is_finished, refund_cents
-from app import avatars, covers, notify
+from app import avatars, covers, notify, payments
 from app.charts import line_chart
 from app import dashboards
 from app.posters import render_poster
@@ -72,6 +72,9 @@ def create_app(config=None):
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
         GOOGLE_CLIENT_ID=os.environ.get('GOOGLE_CLIENT_ID', '').strip(),
         GOOGLE_CLIENT_SECRET=os.environ.get('GOOGLE_CLIENT_SECRET', '').strip(),
+        STRIPE_SECRET_KEY=os.environ.get('STRIPE_SECRET_KEY', '').strip(),
+        STRIPE_PUBLISHABLE_KEY=os.environ.get('STRIPE_PUBLISHABLE_KEY', '').strip(),
+        STRIPE_WEBHOOK_SECRET=os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip(),
     )
     if config:
         app.config.update(config)
@@ -80,7 +83,7 @@ def create_app(config=None):
     if app.config['TRUST_PROXY']:
         # Only enable behind the local Nginx proxy, which overwrites these headers.
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0, x_port=0, x_prefix=0)
-    CSRFProtect(app)
+    csrf = CSRFProtect(app)
 
     def db():
         if 'db' not in g:
@@ -129,6 +132,16 @@ def create_app(config=None):
 
     def interest_total(user_id):
         return query('SELECT count(*) AS n FROM user_interests WHERE user_id=%s', (user_id,), True)['n']
+
+    @app.before_request
+    def release_expired_payment_holds():
+        if request.endpoint in ('static', 'favicon', 'media', 'media_avatar'):
+            return
+        db().execute(
+            '''UPDATE reservations
+               SET status='cancelled', cancelled_at=clock_timestamp(), payment_status='cancelled'
+               WHERE status='pending' AND hold_expires_at IS NOT NULL AND hold_expires_at <= now()'''
+        )
 
     @app.before_request
     def require_interests():
@@ -256,6 +269,13 @@ def create_app(config=None):
             return f'{euros},{centimes:02d} €'
         return f'{euros} €'
 
+    @app.template_filter('euros')
+    def euros_filter(cents):
+        cents = int(cents or 0)
+        sign = '-' if cents < 0 else ''
+        euros, centimes = divmod(abs(cents), 100)
+        return f'{sign}{euros},{centimes:02d} €'
+
     def money_cents(name='price'):
         raw = (request.form.get(name) or '').strip().replace(' ', '').replace('€', '').replace(',', '.')
         if not raw:
@@ -357,11 +377,14 @@ def create_app(config=None):
             'avatar_initials': avatars.initials,
             'avatar_color': avatars.color,
             'google_enabled': bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET')),
+            'payments_ready': payments.ready(app),
+            'payment_block': payments.block_reason(app),
+            'payment_labels': payments.LABELS,
             'settings': query('SELECT * FROM site_settings WHERE id=1', one=True),
         }
 
     event_select = '''SELECT e.*, u.display_name AS organizer, u.avatar_path AS organizer_avatar_path, c.name AS category, c.icon AS category_icon,
-        e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available,
+        e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status IN ('confirmed','pending')) AS available,
         (SELECT round(avg(rv.rating)::numeric, 1) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_avg,
         (SELECT count(*) FROM reviews rv WHERE rv.event_id=e.id AND NOT rv.hidden) AS rating_count
         FROM events e JOIN users u ON u.id=e.organizer_id LEFT JOIN categories c ON c.id=e.category_id'''
@@ -916,7 +939,7 @@ def create_app(config=None):
             FROM reservations r JOIN events e ON e.id=r.event_id
             WHERE r.member_id=%s ORDER BY e.starts_at DESC''', (g.user['id'],))
         moment = datetime.now(timezone.utc)
-        upcoming = [row for row in bookings if row['status'] == 'confirmed' and row['ends_at'] > moment]
+        upcoming = [row for row in bookings if row['status'] in ('confirmed', 'pending') and row['ends_at'] > moment]
         history = [row for row in bookings if row not in upcoming]
         favorites = query(
             event_select + ''' WHERE e.id IN (SELECT event_id FROM favorites WHERE user_id=%s)
@@ -974,6 +997,21 @@ def create_app(config=None):
         flash('Identifiants mis à jour. Connectez-vous à nouveau.', 'success')
         return redirect(url_for('login'))
 
+    def booking_messages():
+        return {
+            'finished': 'Cette activité est terminée.',
+            'cutoff': 'Les inscriptions sont closes.',
+            'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+            'cancelled': 'Cette activité est annulée.',
+            'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
+        }
+
+    def occupied_seats(event_id):
+        return query(
+            "SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status IN ('confirmed','pending')",
+            (event_id,), True,
+        )['n']
+
     @app.get('/activities/<int:event_id>/reserver')
     @require()
     def reserve_confirm(event_id):
@@ -981,60 +1019,126 @@ def create_app(config=None):
         if not event or (event['status'] == 'draft' and event['organizer_id'] != g.user['id'] and 'admin' not in g.roles):
             abort(404)
         booking = query(
-            "SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'",
+            "SELECT * FROM reservations WHERE event_id=%s AND member_id=%s AND status IN ('confirmed','pending')",
             (event_id, g.user['id']), True,
         )
-        messages = {
-            'finished': 'Cette activité est terminée.',
-            'cutoff': 'Les inscriptions sont closes.',
-            'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
-            'cancelled': 'Cette activité est annulée.',
-            'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
-        }
         reason_code = booking_block(event, cutoff_minutes=cutoff_minutes(), available=event['available'])
         return render_template(
             'confirm.html', event=event, booking=booking,
-            reservable=not reason_code, reason=messages.get(reason_code, ''),
+            reservable=not reason_code, reason=booking_messages().get(reason_code, ''),
         )
+
+    def checkout_urls(event_id):
+        base = public_base()
+        return (
+            base + url_for('payment_success') + '?session_id={CHECKOUT_SESSION_ID}',
+            base + url_for('payment_cancel') + '?session_id={CHECKOUT_SESSION_ID}',
+        )
+
+    def open_checkout(event, reservation_id, amount, expires):
+        success_url, cancel_url = checkout_urls(event['id'])
+        session = payments.create_checkout(
+            app,
+            mode='payment',
+            customer_email=g.user['email'],
+            client_reference_id=str(reservation_id),
+            metadata={'reservation_id': str(reservation_id), 'event_id': str(event['id'])},
+            line_items=[{
+                'quantity': 1,
+                'price_data': {
+                    'currency': 'eur',
+                    'unit_amount': int(amount),
+                    'product_data': {'name': (event['title'] or 'Activité')[:120]},
+                },
+            }],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            expires_at=int(expires.timestamp()),
+        )
+        url = getattr(session, 'url', None)
+        session_id = getattr(session, 'id', None)
+        if not url or not session_id:
+            raise ValueError('Paiement indisponible.')
+        return session_id, url
 
     @app.post('/activities/<int:event_id>/reserve')
     @require()
     def reserve(event_id):
         if request.form.get('confirm') != '1' or request.form.get('acknowledged') != '1':
             return redirect(url_for('reserve_confirm', event_id=event_id))
+        checkout_url = None
         with db().transaction():
             event = query('SELECT * FROM events WHERE id=%s FOR UPDATE', (event_id,), True)
             if not event:
                 abort(404)
-            count = query("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'", (event_id,), True)['n']
+            count = occupied_seats(event_id)
+            existing = None
+            if int(event['price_cents'] or 0) > 0:
+                existing = query(
+                    """SELECT * FROM reservations
+                       WHERE event_id=%s AND member_id=%s AND status IN ('confirmed','pending')
+                       FOR UPDATE""",
+                    (event_id, g.user['id']), True,
+                )
+                if existing and existing['status'] == 'pending':
+                    count -= 1
             reason = booking_block(
                 event,
                 cutoff_minutes=cutoff_minutes(),
                 available=event['capacity'] - count,
             )
             if reason:
-                raise ValueError({
-                    'finished': 'Cette activité est terminée.',
-                    'cutoff': 'Les inscriptions sont closes.',
-                    'full': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
-                    'cancelled': 'Cette activité est annulée.',
-                    'unpublished': 'Cette activité n’a plus de place disponible ou les inscriptions sont fermées.',
-                }[reason])
-            if event['price_cents'] > 0 and request.form.get('payment_simulated') != '1':
-                raise ValueError('Cette activité est payante : confirmez le paiement simulé avant de réserver.')
-            created = query('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s) RETURNING id', (g.user['id'], event_id), True)
-            ticket = issue_ticket(db(), created['id'])
-        plain, html_body, images = notify.booking_email(event, ticket, public_base())
-        notify.notify(
-            app, query, g.user['id'], 'booking_confirmed', 'Place confirmée',
-            plain, f'/billets/{ticket["token"]}', dedupe_key=f'booking:{created["id"]}', email=g.user['email'],
-            html_body=html_body, inline_images=images,
-        )
-        if event['price_cents'] > 0:
-            flash('Paiement simulé confirmé. Votre place est réservée — aucun montant n’a été débité.', 'success')
-        else:
+                raise ValueError(booking_messages()[reason])
+            if int(event['price_cents'] or 0) <= 0:
+                created = query('INSERT INTO reservations(member_id,event_id) VALUES (%s,%s) RETURNING id', (g.user['id'], event_id), True)
+                ticket = issue_ticket(db(), created['id'])
+            else:
+                if not payments.ready(app):
+                    raise ValueError('Paiement indisponible.')
+                amount = int(event['price_cents'])
+                expires = datetime.now(timezone.utc) + timedelta(minutes=payments.HOLD_MINUTES)
+                if existing and existing['status'] == 'confirmed':
+                    return render_template(
+                        'error.html', code=409, title='Déjà enregistré',
+                        message='Cette adresse e-mail ou cette inscription existe déjà.',
+                    ), 409
+                try:
+                    if existing and existing['status'] == 'pending' and existing['stripe_checkout_session_id']:
+                        session = payments.retrieve_checkout(app, existing['stripe_checkout_session_id'])
+                        if getattr(session, 'status', None) == 'open' and getattr(session, 'url', None):
+                            checkout_url = session.url
+                        else:
+                            raise ValueError('Un paiement est déjà en cours pour cette activité. Il expire automatiquement.')
+                    else:
+                        if not existing:
+                            # The seat taken by this insert is not in `count` yet.
+                            if event['capacity'] - count < 1:
+                                raise ValueError(booking_messages()['full'])
+                            existing = query(
+                                '''INSERT INTO reservations(
+                                       member_id, event_id, status, payment_status, amount_cents, hold_expires_at)
+                                   VALUES (%s,%s,'pending','pending',%s,%s) RETURNING *''',
+                                (g.user['id'], event_id, amount, expires), True,
+                            )
+                        session_id, checkout_url = open_checkout(event, existing['id'], amount, expires)
+                        db().execute(
+                            '''UPDATE reservations
+                               SET stripe_checkout_session_id=%s, amount_cents=%s, hold_expires_at=%s
+                               WHERE id=%s''',
+                            (session_id, amount, expires, existing['id']),
+                        )
+                except (ValueError, psycopg.errors.UniqueViolation):
+                    raise
+                except Exception:
+                    app.logger.exception('Stripe checkout failed')
+                    raise ValueError('Paiement indisponible.')
+                ticket = None
+                created = None
+        if ticket:
+            send_booking_confirmation(event, ticket, g.user['id'], g.user['email'], created['id'])
             flash('Votre place est réservée ! Retrouvez-la dans votre espace.', 'success')
-        return redirect(url_for('account'))
+            return redirect(url_for('account'))
+        return redirect(checkout_url)
 
     @app.get('/activities/<int:event_id>/paiement')
     @require()
@@ -1046,38 +1150,184 @@ def create_app(config=None):
             return redirect(url_for('detail', event_id=event_id))
         return redirect(url_for('reserve_confirm', event_id=event_id))
 
+    def send_booking_confirmation(event, ticket, user_id, email, booking_id):
+        plain, html_body, images = notify.booking_email(event, ticket, public_base())
+        notify.notify(
+            app, query, user_id, 'booking_confirmed', 'Place confirmée',
+            plain, f'/billets/{ticket["token"]}', dedupe_key=f'booking:{booking_id}', email=email,
+            html_body=html_body, inline_images=images,
+        )
+
+    def payment_booking(session_id):
+        if not session_id or session_id.startswith('{'):
+            return None
+        return query(
+            '''SELECT r.*, e.title, e.starts_at, e.ends_at, e.location, e.price_cents, t.token
+               FROM reservations r JOIN events e ON e.id=r.event_id
+               LEFT JOIN tickets t ON t.reservation_id=r.id
+               WHERE r.stripe_checkout_session_id=%s AND r.member_id=%s''',
+            (session_id, g.user['id']), True,
+        )
+
+    @app.get('/paiement/succes')
+    @require()
+    def payment_success():
+        booking = payment_booking(request.args.get('session_id', ''))
+        return render_template('payment.html', outcome='success', booking=booking)
+
+    @app.get('/paiement/annule')
+    @require()
+    def payment_cancel():
+        session_id = request.args.get('session_id', '')
+        with db().transaction():
+            booking = payment_booking(session_id)
+            if booking and booking['status'] == 'pending':
+                db().execute(
+                    '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+                       payment_status='cancelled'
+                       WHERE id=%s AND status='pending' ''',
+                    (booking['id'],),
+                )
+                booking = dict(booking)
+                booking['status'] = 'cancelled'
+                booking['payment_status'] = 'cancelled'
+        return render_template('payment.html', outcome='cancel', booking=booking)
+
+    def confirm_checkout_session(session):
+        session_id = session.get('id')
+        intent = session.get('payment_intent')
+        if isinstance(intent, dict):
+            intent = intent.get('id')
+        reference = session.get('client_reference_id') or (session.get('metadata') or {}).get('reservation_id')
+        amount = session.get('amount_total')
+        with db().transaction():
+            row = None
+            if session_id:
+                row = query(
+                    'SELECT * FROM reservations WHERE stripe_checkout_session_id=%s FOR UPDATE',
+                    (session_id,), True,
+                )
+            if not row and reference and str(reference).isdigit():
+                row = query('SELECT * FROM reservations WHERE id=%s FOR UPDATE', (int(reference),), True)
+            if not row:
+                return 'missing', None
+            if row['status'] == 'confirmed' and row['payment_status'] == 'paid':
+                return 'duplicate', row
+            if row['status'] != 'pending':
+                charged = int(amount or row['amount_cents'] or 0)
+                if intent and charged > 0 and row['payment_status'] != 'refunded':
+                    payments.refund(app, intent, charged, f'joinly-expire-{row["id"]}')
+                    db().execute(
+                        '''UPDATE reservations SET payment_status='refunded', refund_status='stripe',
+                           refund_cents=%s, refunded_at=clock_timestamp(), stripe_payment_intent_id=%s
+                           WHERE id=%s AND payment_status <> 'refunded' ''',
+                        (charged, intent, row['id']),
+                    )
+                return 'released', row
+            if session.get('payment_status') != 'paid':
+                return 'unpaid', row
+            db().execute(
+                '''UPDATE reservations
+                   SET status='confirmed', payment_status='paid', hold_expires_at=NULL,
+                       stripe_payment_intent_id=%s,
+                       amount_cents=COALESCE(%s, amount_cents)
+                   WHERE id=%s AND status='pending' ''',
+                (intent, amount, row['id']),
+            )
+            ticket = issue_ticket(db(), row['id'])
+            event = query('SELECT * FROM events WHERE id=%s', (row['event_id'],), True)
+            user = query('SELECT id, email FROM users WHERE id=%s', (row['member_id'],), True)
+        send_booking_confirmation(event, ticket, user['id'], user['email'], row['id'])
+        return 'confirmed', row
+
+    @app.post('/stripe/webhook')
+    @csrf.exempt
+    def stripe_webhook():
+        payload = request.get_data()
+        signature = request.headers.get('Stripe-Signature', '')
+        try:
+            event = payments.construct_event(app, payload, signature)
+        except Exception:
+            app.logger.info('Rejected Stripe webhook signature')
+            return '', 400
+        if event['type'] != 'checkout.session.completed':
+            return '', 200
+        try:
+            confirm_checkout_session(event['data']['object'])
+        except Exception:
+            app.logger.exception('Stripe webhook failed')
+            return '', 500
+        return '', 200
+
+    def refund_label(kind, cents):
+        euros = f'{cents // 100},{cents % 100:02d} €'
+        if kind == 'stripe':
+            return f'Remboursement de test : {euros}.'
+        return f'Remboursement simulé : {euros}.'
+
+    def cancel_confirmed_row(booking, event, cents):
+        """Cancel one confirmed booking. Stripe refund only when a test charge exists."""
+        intent = booking.get('stripe_payment_intent_id')
+        paid = booking.get('payment_status') == 'paid' and intent and cents > 0
+        if paid:
+            payments.refund(app, intent, cents, f'joinly-refund-{booking["id"]}')
+            db().execute(
+                '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+                   refund_cents=%s, refund_status='stripe', refunded_at=clock_timestamp(),
+                   payment_status='refunded'
+                   WHERE id=%s AND status='confirmed' ''',
+                (cents, booking['id']),
+            )
+            return 'stripe'
+        db().execute(
+            '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+               refund_cents=%s, refund_status=%s,
+               refunded_at=CASE WHEN %s > 0 THEN clock_timestamp() ELSE NULL END
+               WHERE id=%s AND status='confirmed' ''',
+            (cents, 'simulated' if cents else 'none', cents, booking['id']),
+        )
+        return 'stripe' if paid else ('simulated' if cents else 'none')
+
     @app.post('/reservations/<int:booking_id>/cancel')
     @require()
     def cancel_booking(booking_id):
         with db().transaction():
-            booking = query('SELECT * FROM reservations WHERE id=%s AND member_id=%s', (booking_id, g.user['id']), True)
+            booking = query(
+                'SELECT * FROM reservations WHERE id=%s AND member_id=%s FOR UPDATE',
+                (booking_id, g.user['id']), True,
+            )
             if not booking:
                 abort(404)
             event = query('SELECT * FROM events WHERE id=%s FOR UPDATE', (booking['event_id'],), True)
             if event['starts_at'] <= datetime.now(timezone.utc):
                 raise ValueError('Cette activité a déjà commencé.')
+            if booking['status'] == 'pending':
+                db().execute(
+                    '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+                       payment_status='cancelled'
+                       WHERE id=%s AND status='pending' ''',
+                    (booking_id,),
+                )
+                flash('Paiement annulé. La place a été libérée.', 'success')
+                return redirect(url_for('account'))
             cents = refund_cents(event)
-            db().execute(
-                '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
-                   refund_cents=%s, refund_status=%s,
-                   refunded_at=CASE WHEN %s > 0 THEN clock_timestamp() ELSE NULL END
-                   WHERE id=%s AND status='confirmed' ''',
-                (cents, 'simulated' if cents else 'none', cents, booking_id),
-            )
-        euros = f'{cents // 100},{cents % 100:02d} €'
+            kind = 'none'
+            if booking['status'] == 'confirmed':
+                kind = cancel_confirmed_row(booking, event, cents)
+        label = refund_label(kind, cents)
         notify.notify(
             app, query, g.user['id'], 'event_cancelled', 'Réservation annulée',
-            f'Votre inscription à « {event["title"]} » est annulée. Remboursement simulé : {euros}.',
+            f'Votre inscription à « {event["title"]} » est annulée. {label}',
             '/account/billets', dedupe_key=f'refund:{booking_id}', email=g.user['email'],
         )
         organizer = query('SELECT id, email FROM users WHERE id=%s', (event['organizer_id'],), True)
         if organizer and organizer['id'] != g.user['id']:
             notify.notify(
                 app, query, organizer['id'], 'event_changed', 'Une inscription a été annulée',
-                f'{g.user["display_name"]} a annulé sa place pour « {event["title"]} ». Remboursement simulé : {euros}.',
+                f'{g.user["display_name"]} a annulé sa place pour « {event["title"]} ». {label}',
                 f'/organizer/{event["id"]}/participants', email=organizer['email'],
             )
-        flash(f'Réservation annulée. Remboursement simulé : {euros}.', 'success')
+        flash(f'Réservation annulée. {label}', 'success')
         return redirect(url_for('account'))
 
     def _organizer_board():
@@ -1164,7 +1414,7 @@ def create_app(config=None):
                         raise ValueError('Une activité terminée ne peut plus changer de dates. Un administrateur peut les corriger.')
                     if event['status'] == 'cancelled' or event['starts_at'] <= datetime.now(timezone.utc):
                         raise ValueError('Une activité annulée ou commencée ne peut plus être modifiée.')
-                    counts = query("SELECT count(*) AS total, count(*) FILTER (WHERE status='confirmed') AS active FROM reservations WHERE event_id=%s", (event_id,), True)
+                    counts = query("SELECT count(*) AS total, count(*) FILTER (WHERE status IN ('confirmed','pending')) AS active FROM reservations WHERE event_id=%s", (event_id,), True)
                     if counts['total'] and any(data[k] != event[k] for k in ('starts_at', 'ends_at', 'location')):
                         raise ValueError('Après une inscription, la date et le lieu ne peuvent plus changer. Annulez puis créez une nouvelle activité.')
                     if counts['total'] and data['status'] == 'draft':
@@ -1235,26 +1485,35 @@ def create_app(config=None):
             if event['starts_at'] <= datetime.now(timezone.utc):
                 raise ValueError('Cette activité a déjà commencé.')
             people = query(
-                '''SELECT u.id, u.email, e.price_cents FROM reservations r
+                '''SELECT u.id, u.email, e.price_cents, r.id AS booking_id, r.status,
+                          r.payment_status, r.stripe_payment_intent_id, r.amount_cents
+                   FROM reservations r
                    JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id
-                   WHERE r.event_id=%s AND r.status='confirmed' ''',
+                   WHERE r.event_id=%s AND r.status='confirmed'
+                   FOR UPDATE OF r''',
                 (event_id,),
             )
             db().execute("UPDATE events SET status='cancelled' WHERE id=%s", (event_id,))
+            db().execute(
+                '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
+                   payment_status='cancelled'
+                   WHERE event_id=%s AND status='pending' ''',
+                (event_id,),
+            )
             for person in people:
-                cents = int(person['price_cents'] or 0)
-                db().execute(
-                    '''UPDATE reservations SET status='cancelled', cancelled_at=clock_timestamp(),
-                       refund_cents=%s, refund_status=%s,
-                       refunded_at=CASE WHEN %s > 0 THEN clock_timestamp() ELSE NULL END
-                       WHERE member_id=%s AND event_id=%s AND status='confirmed' ''',
-                    (cents, 'simulated' if cents else 'none', cents, person['id'], event_id),
-                )
+                cents = int(person['amount_cents'] if person['amount_cents'] is not None else person['price_cents'] or 0)
+                booking = {
+                    'id': person['booking_id'],
+                    'payment_status': person['payment_status'],
+                    'stripe_payment_intent_id': person['stripe_payment_intent_id'],
+                }
+                person['refund_kind'] = cancel_confirmed_row(booking, event, cents)
+                person['refund_cents'] = cents
         for person in people:
-            euros = f'{int(person["price_cents"] or 0) // 100},{int(person["price_cents"] or 0) % 100:02d} €'
+            label = refund_label(person['refund_kind'], int(person['refund_cents']))
             notify.notify(
                 app, query, person['id'], 'event_cancelled', 'Activité annulée',
-                f'« {event["title"]} » est annulée. Remboursement simulé : {euros}. Votre billet n’est plus valable.',
+                f'« {event["title"]} » est annulée. {label} Votre billet n’est plus valable.',
                 f'/activities/{event_id}', dedupe_key=f'cancelled:{event_id}:{person["id"]}', email=person['email'],
             )
         flash('Activité et inscriptions annulées.', 'success')
@@ -1267,10 +1526,10 @@ def create_app(config=None):
         if not event:
             abort(404)
         people = query(
-            '''SELECT u.id, u.display_name, u.avatar_path, r.reserved_at, t.checked_in_at
+            '''SELECT u.id, u.display_name, u.avatar_path, r.reserved_at, r.payment_status, r.amount_cents, t.checked_in_at
                FROM reservations r JOIN users u ON u.id=r.member_id
                LEFT JOIN tickets t ON t.reservation_id=r.id
-               WHERE r.event_id=%s AND r.status='confirmed' ORDER BY r.reserved_at''',
+               WHERE r.event_id=%s AND r.status IN ('confirmed','pending') ORDER BY r.reserved_at''',
             (event_id,),
         )
         checked = sum(1 for person in people if person['checked_in_at'])

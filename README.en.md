@@ -34,6 +34,7 @@ The repository has no `LICENSE` file. See [Team, credits and licence](#team-cred
 - [Repository layout](#repository-layout)
 - [Local setup](#local-setup)
 - [Environment variables](#environment-variables)
+- [Payments (test mode)](#payments-test-mode)
 - [Tests](#tests)
 - [Deployment](#deployment)
 - [Security](#security)
@@ -48,12 +49,12 @@ Joinly keeps those steps in one application:
 
 1. browse published activities and open a page (description, Paris time, place, price, seats, and a map when coordinates are stored);
 2. create an account, confirm the address, and choose at least three interests;
-3. review a recap, then book — for free, or after a **simulated** payment confirmation;
+3. review a recap, then book — for free, or after a Stripe payment in **test mode**;
 4. receive an HTML e-mail with a QR code and a ticket link that works without signing in;
 5. as an organizer, publish the activity, follow how full it is, and scan tickets;
 6. as an administrator, moderate accounts, content and reviews.
 
-The shipped interface is in French. Payment does not collect money: an activity priced above zero only asks for the “Simulated payment — student project” acknowledgement. No card number is collected.
+The shipped interface is in French. An activity priced at €0 is booked with no payment. A paid activity redirects to Stripe Checkout in test mode only: see [Payments (test mode)](#payments-test-mode).
 
 `joinly_front/` keeps the original static mock-up. The running application is `app/`. Opening `index.html` starts neither Flask nor the database.
 
@@ -68,8 +69,8 @@ Roles are `member`, `organizer` and `admin`. They can be combined. Public sign-u
 - **Recommendations and ranking.** At least three interests are required (administrators are exempt). The home page shows “Recommended for you”. `/classement` ranks upcoming published activities.
 - **Favourites and follows.** Save an activity, follow an organizer, and open the organizer’s public page.
 - **Reviews.** After the activity ends, a participant whose booking is still confirmed leaves a rating from 1 to 5 and a comment, which can be edited. A review hidden by an administrator drops out of the average.
-- **Two-step booking.** The button opens a recap (date, place, organizer, price, seats, cancellation policy, participant identity). The seat is created only after the “I have checked this information” box. A paid activity also requires the simulated-payment confirmation.
-- **Cancellation.** Before the start, according to the activity’s policy: flexible (full refund until 24 hours before, otherwise none), moderate (full until 72 hours, otherwise half), strict (none). The amount is a simulated refund. The seat is freed and the ticket is invalidated.
+- **Two-step booking.** The button opens a recap (date, place, organizer, price, seats, cancellation policy, participant identity). A free seat is created only after the “I have checked this information” box. A paid activity then opens Stripe Checkout; the seat is held for 30 minutes and confirmed only after the webhook.
+- **Cancellation.** Before the start, according to the activity’s policy: flexible (full refund until 24 hours before, otherwise none), moderate (full until 72 hours, otherwise half), strict (none). A booking paid in test mode triggers a Stripe refund of that amount. The seat is freed and the ticket is invalidated.
 - **Ticket and e-mail.** Each confirmed booking receives a short code `JOIN-XXXX-XX` and an unguessable token. The confirmation e-mail is HTML, with the QR code inline and a link to `/billets/<token>`. That ticket page **does not require a session**.
 - **Reminder.** `send-reminders` notifies each confirmed booking once, in the app and by e-mail, when the activity starts within 24 hours. The systemd timer that runs it is hourly; `scripts/install-service.sh` does not install it.
 - **Account.** Profile, avatar (JPEG, PNG or WebP, cropped to a square; initials otherwise), e-mail and password change, history, notification bell.
@@ -79,14 +80,14 @@ Roles are `member`, `organizer` and `admin`. They can be combined. Public sign-u
 ### Organizer
 
 - **Publishing.** Create and edit an activity as a draft or as published: title, description, place, city, coordinates, dates, capacity, price, cancellation policy, cover image. The organizer can no longer change the dates of an activity that has already finished.
-- **Cancelling an activity.** Confirmed bookings are cancelled with a full simulated refund.
+- **Cancelling an activity.** Confirmed bookings are cancelled. A seat paid in test mode is refunded through Stripe.
 - **Participants.** List of confirmed attendees (display name, booking time, check-in state). E-mail addresses are not shown.
 - **QR check-in.** “Ticket check” page: type the code or scan with the camera (`BarcodeDetector`, otherwise html5-qrcode). A ticket is accepted only once, only for that activity, and only while the booking is still confirmed. A check-in can be undone.
-- **Dashboard.** `/organizer` and `/organizer/tableau`: views, fill rate, simulated revenue (confirmed bookings minus refunds), average rating, followed activities, SVG charts over 7, 30 or 90 days.
+- **Dashboard.** `/organizer` and `/organizer/tableau`: views, fill rate, simulated revenue (confirmed bookings minus refunds), collected revenue (test payments minus refunds), payment status of recent bookings, average rating, followed activities, SVG charts over 7, 30 or 90 days.
 
 ### Administration
 
-`/admin` requires the `admin` role. The dashboard shows accounts, the share of confirmed addresses, open activities, bookings, simulated revenue, average rating and pending messages, with SVG charts over 7, 30 or 90 days.
+`/admin` requires the `admin` role. The dashboard shows accounts, the share of confirmed addresses, open activities, bookings, simulated revenue, collected revenue, average rating and pending messages, with SVG charts over 7, 30 or 90 days. The booking list shows payment status.
 
 - Accounts: search, status (active, suspended, banned), CSV export, bulk action, profile, password, avatar, and “view as” (dedicated banner, written to the audit log). An administrator cannot change their own rights or suspend their own account.
 - Activities and bookings: filterable lists, CSV exports, price and date corrections, cover image, manual simulated refund.
@@ -103,7 +104,7 @@ The [requirements document](docs/cahier-des-charges-joinly.md) and the [acceptan
 
 - a conversational assistant and calls to an AI model (consent is only stored);
 - internal messaging and a forum;
-- real payment collection (no payment provider);
+- charges outside test mode (a live Stripe key is refused);
 - a multilingual interface;
 - a full accessibility audit;
 - automated backups (a manual `pg_dump` is documented in `database/README.md`).
@@ -176,7 +177,7 @@ G1Dlab_joinly/
 │   ├── static/                  # CSS, JS, covers, favicon
 │   └── fonts/                   # Source Sans 3
 ├── database/
-│   ├── migrations/              # 001_initial.sql … 016_avatars.sql
+│   ├── migrations/              # 001_initial.sql … 017_stripe_payments.sql
 │   ├── scripts/setup-local.py   # Local database creation
 │   └── tests/constraints.sql
 ├── deploy/                      # systemd units, timer, Nginx example
@@ -189,7 +190,7 @@ G1Dlab_joinly/
 └── .env.example                 # Variable names, no secrets
 ```
 
-Migrations, in order: initial schema and roles; sessions, contact and rate limits; privacy pages; interests and prices; city; reviews; favourites and follows; covers; coordinates; notifications; e-mail confirmation; tickets; cancellations and simulated refunds; Google sign-in; administration; avatars.
+Migrations, in order: initial schema and roles; sessions, contact and rate limits; privacy pages; interests and prices; city; reviews; favourites and follows; covers; coordinates; notifications; e-mail confirmation; tickets; cancellations and simulated refunds; Google sign-in; administration; avatars; Stripe test-mode payments (EUR, status, Checkout session, payment intent, amount).
 
 ## Local setup
 
@@ -267,8 +268,23 @@ The names below are those read by the application, by libpq, or by the scripts. 
 | `TRUST_PROXY` | `1` only behind the trusted local reverse proxy. One hop is trusted for the address and the protocol. |
 | `TRUSTED_HOSTS` | Allowed hosts, comma-separated. |
 | `UNSPLASH_ACCESS_KEY` | Key read only by `scripts/fetch_unsplash_covers.py`. The web application does not use it. |
+| `STRIPE_SECRET_KEY` | Stripe secret key. Only a value that starts with `sk_test_` can start a payment. |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key, read with the other two. Checkout is a redirect: Joinly pages do not load Stripe.js. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for the `checkout.session.completed` webhook. |
 
 Without SMTP, the confirmation code is written to the log and to the `dev_outbox` table. A notification delivery failure is logged and does not roll back the booking.
+
+## Payments (test mode)
+
+An activity price is stored in euro cents (`events.price_cents`, currency `EUR`). Zero stays free: that booking flow is unchanged. The demo seed already prices some activities, for example “Yoga au parc” and “Tartes de saison”.
+
+After the “I have checked this information” box, a paid activity creates a Stripe Checkout Session and redirects to Stripe’s hosted page. The seat is held for 30 minutes (`pending`) and released if it stays unpaid. The booking becomes confirmed, and the ticket (QR email and `/billets/<token>`) is sent, only after the `checkout.session.completed` webhook, whose signature is checked with `STRIPE_WEBHOOK_SECRET`. The same event confirms only once. Cancelling a paid seat starts a Stripe test refund, following the cancellation policy.
+
+Without `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`, the page shows “Paiement indisponible” and the rest of the application still starts. A key that does not start with `sk_test_` is refused. Payment pages show “Mode test — aucun paiement réel”.
+
+Test card: `4242 4242 4242 4242`, any future date, any CVC. No real charge is made.
+
+Webhook URL to register in Stripe: `https://<host>/stripe/webhook`.
 
 ## Tests
 

@@ -18,6 +18,7 @@
 <article class="panel kpi"><p class="muted">Activités ouvertes</p><p class="kpi-value">{{ kpis.active_events }}</p><p class="muted">{{ kpis.events }} au total</p></article>
 <article class="panel kpi"><p class="muted">Réservations</p><p class="kpi-value">{{ kpis.reservations }}</p></article>
 <article class="panel kpi"><p class="muted">Revenu simulé</p><p class="kpi-value">{{ kpis.revenue|pricefr }}</p></article>
+<article class="panel kpi"><p class="muted">Revenu encaissé</p><p class="kpi-value">{{ collected|euros }}</p></article>
 <article class="panel kpi"><p class="muted">Note moyenne</p><p class="kpi-value">{{ kpis.rating or '—' }}</p></article>
 <article class="panel kpi"><p class="muted">Notifications envoyées</p><p class="kpi-value">{{ kpis.notifications }}</p><p class="muted">sur la période</p></article>
 <article class="panel kpi"><p class="muted">À modérer</p><p class="kpi-value">{{ kpis.pending }}</p><p class="muted">messages</p></article>
@@ -152,7 +153,7 @@
 </div>
 {% endfor %}
 <h2 id="tarifs">Tarifs des activités</h2>
-<p>Le prix est en euros. 0 signifie gratuit. Le paiement des activités payantes reste simulé : aucune carte n’est enregistrée.</p>
+<p>Le prix est en euros. 0 signifie gratuit. Une activité payante passe par Stripe en mode test.</p>
 <div class="admin-grid">
 {% for e in priced_events %}
 <form class="panel stack" method="post" action="{{ url_for('admin_event_price', event_id=e.id) }}">

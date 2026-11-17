@@ -277,10 +277,10 @@ def register_office(app, query, db, text, email_value, money_cents):
         if blocked:
             return blocked
         rows = query(
-            '''SELECT r.id, u.email, e.title, r.status, r.refund_cents FROM reservations r
+            '''SELECT r.id, u.email, e.title, r.status, r.payment_status, r.refund_cents FROM reservations r
                JOIN users u ON u.id=r.member_id JOIN events e ON e.id=r.event_id ORDER BY r.id'''
         )
-        return csv_response('reservations.csv', ['id', 'email', 'activite', 'statut', 'remboursement'], [(r['id'], r['email'], r['title'], r['status'], r['refund_cents']) for r in rows])
+        return csv_response('reservations.csv', ['id', 'email', 'activite', 'statut', 'paiement', 'remboursement'], [(r['id'], r['email'], r['title'], r['status'], r['payment_status'], r['refund_cents']) for r in rows])
 
     @app.post('/admin/avis/<int:review_id>/texte')
     def admin_review_text(review_id):

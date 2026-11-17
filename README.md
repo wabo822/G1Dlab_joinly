@@ -34,6 +34,7 @@ Le dépôt ne comporte pas de fichier `LICENSE`. Voir [Équipe, crédits et lice
 - [Arborescence](#arborescence)
 - [Installation locale](#installation-locale)
 - [Variables d’environnement](#variables-denvironnement)
+- [Paiements (mode test)](#paiements-mode-test)
 - [Tests](#tests)
 - [Déploiement](#déploiement)
 - [Sécurité](#sécurité)
@@ -48,12 +49,12 @@ Joinly réunit ces étapes dans une seule application :
 
 1. parcourir les activités publiées et ouvrir une fiche (description, horaire de Paris, lieu, tarif, places, carte si des coordonnées sont enregistrées) ;
 2. créer un compte, confirmer son adresse, choisir au moins trois centres d’intérêt ;
-3. vérifier un récapitulatif, puis réserver — gratuitement, ou après une confirmation de paiement **simulée** ;
+3. vérifier un récapitulatif, puis réserver — gratuitement, ou après un paiement Stripe en **mode test** ;
 4. recevoir un e-mail HTML avec un QR code et un lien de billet utilisable sans connexion ;
 5. côté organisateur, publier l’activité, suivre le remplissage et scanner les billets ;
 6. côté administration, modérer les comptes, les contenus et les avis.
 
-L’interface livrée est en français. Le paiement n’encaisse rien : une activité dont le prix est supérieur à zéro demande seulement la case « Paiement simulé — projet étudiant ». Aucune carte bancaire n’est collectée.
+L’interface livrée est en français. Une activité à 0 € se réserve sans paiement. Une activité payante redirige vers Stripe Checkout en mode test uniquement : voir [Paiements (mode test)](#paiements-mode-test).
 
 Le dossier `joinly_front/` conserve la maquette statique d’origine. L’application exécutable est `app/`. Ouvrir `index.html` ne démarre ni Flask ni la base.
 
@@ -68,8 +69,8 @@ Les rôles sont `member`, `organizer` et `admin`. Ils sont cumulables. L’inscr
 - **Recommandations et classement.** Au moins trois centres d’intérêt sont exigés (l’administrateur en est dispensé). L’accueil propose « Recommandé pour vous ». La page `/classement` classe les activités publiées à venir.
 - **Favoris et suivis.** Mise en favori d’une activité, abonnement à un organisateur, page publique de l’organisateur.
 - **Avis.** Après la fin de l’activité, un participant encore inscrit laisse une note de 1 à 5 et un commentaire, modifiable. Un avis masqué par l’administration sort de la moyenne.
-- **Réservation en deux temps.** Le bouton mène à une page de récapitulatif (date, lieu, organisateur, tarif, places, politique d’annulation, identité du participant). La place n’est créée qu’après la case « J’ai vérifié ces informations ». Une activité payante exige en plus la confirmation du paiement simulé.
-- **Annulation.** Avant le début, selon la politique de l’activité : souple (intégral jusqu’à 24 h avant, sinon rien), modérée (intégral jusqu’à 72 h, sinon la moitié), stricte (rien). Le montant est un remboursement simulé. La place se libère et le billet est invalidé.
+- **Réservation en deux temps.** Le bouton mène à une page de récapitulatif (date, lieu, organisateur, tarif, places, politique d’annulation, identité du participant). La place gratuite n’est créée qu’après la case « J’ai vérifié ces informations ». Une activité payante ouvre ensuite Stripe Checkout ; la place est gardée 30 minutes et n’est confirmée qu’après le webhook.
+- **Annulation.** Avant le début, selon la politique de l’activité : souple (intégral jusqu’à 24 h avant, sinon rien), modérée (intégral jusqu’à 72 h, sinon la moitié), stricte (rien). Une réservation payée en mode test déclenche un remboursement Stripe du même montant. La place se libère et le billet est invalidé.
 - **Billet et e-mail.** Chaque inscription confirmée reçoit un code court `JOIN-XXXX-XX` et un jeton imprévisible. L’e-mail de confirmation est en HTML, avec le QR code en image jointe et un lien vers `/billets/<jeton>`. Cette page de billet **ne demande pas de connexion**.
 - **Rappel.** La commande `send-reminders` prévient une seule fois, par notification et par e-mail, chaque inscription confirmée dont l’activité commence dans les 24 heures. Le minuteur systemd qui l’exécute est horaire ; `scripts/install-service.sh` ne l’installe pas.
 - **Compte.** Profil, avatar (JPEG, PNG ou WebP, recadré en carré ; à défaut, les initiales), changement d’adresse et de mot de passe, historique, cloche de notifications.
@@ -82,11 +83,11 @@ Les rôles sont `member`, `organizer` et `admin`. Ils sont cumulables. L’inscr
 - **Annulation d’activité.** Les inscriptions confirmées sont annulées avec un remboursement simulé intégral.
 - **Participants.** Liste des inscrits confirmés (nom affiché, date d’inscription, état du contrôle). Les adresses électroniques ne sont pas affichées.
 - **Contrôle QR.** Page « Contrôle des billets » : saisie du code ou scan par la caméra (`BarcodeDetector`, sinon html5-qrcode). Un billet n’est accepté qu’une fois, pour cette activité, et seulement s’il est encore confirmé. Le contrôle peut être annulé.
-- **Tableau de bord.** `/organizer` et `/organizer/tableau` : consultations, taux de remplissage, revenu simulé (inscriptions confirmées moins les remboursements), note moyenne, activités suivies, graphiques SVG sur 7, 30 ou 90 jours.
+- **Tableau de bord.** `/organizer` et `/organizer/tableau` : consultations, taux de remplissage, revenu simulé (inscriptions confirmées moins les remboursements), revenu encaissé (paiements test moins les remboursements), statut de paiement des réservations récentes, note moyenne, activités suivies, graphiques SVG sur 7, 30 ou 90 jours.
 
 ### Administration
 
-L’espace `/admin` est réservé au rôle `admin`. Le tableau de bord affiche les comptes, le taux d’adresses confirmées, les activités ouvertes, les réservations, le revenu simulé, la note moyenne et les messages en attente, avec des graphiques SVG sur 7, 30 ou 90 jours.
+L’espace `/admin` est réservé au rôle `admin`. Le tableau de bord affiche les comptes, le taux d’adresses confirmées, les activités ouvertes, les réservations, le revenu simulé, le revenu encaissé, la note moyenne et les messages en attente, avec des graphiques SVG sur 7, 30 ou 90 jours. La liste des réservations indique le statut de paiement.
 
 - Comptes : recherche, statut (actif, suspendu, banni), export CSV, traitement groupé, fiche, mot de passe, avatar, consultation d’un compte (bandeau dédié, action journalisée). Un administrateur ne modifie pas ses propres droits et ne suspend pas son propre compte.
 - Activités et réservations : listes filtrables, exports CSV, correction de prix et de dates, image de couverture, remboursement simulé manuel.
@@ -103,7 +104,7 @@ Ces sujets figurent dans le [cahier des charges](docs/cahier-des-charges-joinly.
 
 - assistant conversationnel et appels à un modèle d’IA (le consentement est seulement enregistré) ;
 - messagerie interne et forum ;
-- encaissement réel (aucun prestataire de paiement) ;
+- encaissement hors mode test (une clé Stripe live est refusée) ;
 - interface multilingue ;
 - audit d’accessibilité complet ;
 - sauvegardes automatiques (un `pg_dump` manuel est documenté dans `database/README.md`).
@@ -176,7 +177,7 @@ G1Dlab_joinly/
 │   ├── static/                  # CSS, JS, couvertures, favicon
 │   └── fonts/                   # Source Sans 3
 ├── database/
-│   ├── migrations/              # 001_initial.sql … 016_avatars.sql
+│   ├── migrations/              # 001_initial.sql … 017_stripe_payments.sql
 │   ├── scripts/setup-local.py   # Création de la base locale
 │   └── tests/constraints.sql
 ├── deploy/                      # Unités systemd, minuteur, exemple Nginx
@@ -189,7 +190,7 @@ G1Dlab_joinly/
 └── .env.example                 # Noms des variables, sans secret
 ```
 
-Migrations, dans l’ordre : schéma initial et rôles ; sessions, contact et limites de débit ; pages de confidentialité ; centres d’intérêt et prix ; ville ; avis ; favoris et abonnements ; couvertures ; coordonnées ; notifications ; confirmation d’adresse ; billets ; annulations et remboursements simulés ; connexion Google ; administration ; avatars.
+Migrations, dans l’ordre : schéma initial et rôles ; sessions, contact et limites de débit ; pages de confidentialité ; centres d’intérêt et prix ; ville ; avis ; favoris et abonnements ; couvertures ; coordonnées ; notifications ; confirmation d’adresse ; billets ; annulations et remboursements simulés ; connexion Google ; administration ; avatars ; paiements Stripe en mode test (devise EUR, statut, session Checkout, intention de paiement, montant).
 
 ## Installation locale
 
@@ -267,8 +268,23 @@ Les noms ci-dessous sont ceux lus par l’application, par libpq ou par les scri
 | `TRUST_PROXY` | `1` seulement derrière le reverse proxy local de confiance. Un seul saut est lu pour l’adresse et le protocole. |
 | `TRUSTED_HOSTS` | Hôtes autorisés, séparés par des virgules. |
 | `UNSPLASH_ACCESS_KEY` | Clé lue uniquement par `scripts/fetch_unsplash_covers.py`. L’application web ne l’utilise pas. |
+| `STRIPE_SECRET_KEY` | Clé secrète Stripe. Seule une valeur qui commence par `sk_test_` autorise un paiement. |
+| `STRIPE_PUBLISHABLE_KEY` | Clé publiable Stripe, lue avec les deux autres. Le paiement redirige vers Checkout : la page Joinly ne charge pas Stripe.js. |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du webhook `checkout.session.completed`. |
 
 Sans SMTP, le code de confirmation est écrit dans le journal et dans la table `dev_outbox`. L’échec d’envoi d’une notification est journalisé et n’annule pas la réservation.
+
+## Paiements (mode test)
+
+Le prix d’une activité est en centimes d’euro (`events.price_cents`, devise `EUR`). Zéro reste gratuit : le parcours de réservation ne change pas. Le jeu de démonstration donne déjà un prix à une partie des activités, par exemple « Yoga au parc » et « Tartes de saison ».
+
+Après la case « J’ai vérifié ces informations », une activité payante crée une session Stripe Checkout et redirige vers la page hébergée par Stripe. La place est gardée 30 minutes (`pending`) puis libérée si le paiement n’aboutit pas. La réservation ne passe à confirmée, et le billet (e-mail avec QR et `/billets/<jeton>`) n’est envoyé, qu’après le webhook `checkout.session.completed`, dont la signature est vérifiée avec `STRIPE_WEBHOOK_SECRET`. Un même événement ne confirme qu’une fois. L’annulation d’une place payée lance un remboursement Stripe de test, selon la politique d’annulation.
+
+Sans `STRIPE_SECRET_KEY` ou sans `STRIPE_WEBHOOK_SECRET`, la page affiche « Paiement indisponible » et le reste de l’application démarre. Une clé qui ne commence pas par `sk_test_` est refusée. Les pages de paiement affichent « Mode test — aucun paiement réel ».
+
+Carte de test : `4242 4242 4242 4242`, une date future, un CVC quelconque. Aucun paiement réel n’est encaissé.
+
+URL du webhook à enregistrer dans Stripe : `https://<hôte>/stripe/webhook`.
 
 ## Tests
 
