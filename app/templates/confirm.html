@@ -8,7 +8,11 @@
 <p class="eyebrow">CONFIRMATION</p>
 <h1>Vérifiez votre inscription.</h1>
 <div class="panel stack">
-{% if event.price_cents and payments_ready %}
+{% if confirmation_action %}
+{% if event.price_cents %}
+<p class="notice">Paiement simulé — projet étudiant. Aucun montant n’est débité et aucune carte bancaire n’est demandée.</p>
+{% endif %}
+{% elif event.price_cents and payments_ready %}
 <p class="test-banner">Mode test — aucun paiement réel</p>
 {% elif event.price_cents and payment_block == 'refused' %}
 <p class="notice error">Paiement indisponible. Seul le mode test Stripe est autorisé.</p>
@@ -32,6 +36,31 @@
 <dt>Participant</dt>
 <dd>{{ g.user.display_name }} · {{ g.user.email }}</dd>
 </dl>
+{% if confirmation_action %}
+{% if not reservable %}
+<p class="notice error">{{ reason }}</p>
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+{% elif booking %}
+<p class="notice success">Votre place est déjà réservée.</p>
+<a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
+{% else %}
+<form method="post" action="{{ confirmation_action }}" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="confirm" value="1">
+{% if event.price_cents %}
+<input type="hidden" name="payment_simulated" value="1">
+{% endif %}
+<label class="check">
+<input type="checkbox" name="acknowledged" value="1" required>
+J’ai vérifié ces informations
+</label>
+<div class="actions">
+<button>Confirmer la réservation</button>
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+</div>
+</form>
+{% endif %}
+{% else %}
 {% if not reservable %}
 <p class="notice error">{{ reason }}</p>
 <a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
@@ -63,6 +92,7 @@ J’ai vérifié ces informations
 </form>
 {% if event.price_cents %}
 <p class="muted">La place est gardée 30 minutes. Elle n’est confirmée qu’après le paiement, et le billet est envoyé à ce moment-là.</p>
+{% endif %}
 {% endif %}
 {% endif %}
 </div>

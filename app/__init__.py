@@ -43,7 +43,7 @@ LEGAL_TITLES = {
 }
 PUBLIC_PATHS = ('/', '/activities', '/classement', '/faq', '/contact', '/legal/terms', '/legal/legal_notice', '/legal/privacy')
 MIN_INTERESTS = 3
-INTEREST_FREE = {'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
+INTEREST_FREE = {'mcp_endpoint', 'mcp_settings', 'assistant_chat', 'static', 'interests', 'logout', 'legal', 'privacy_redirect', 'robots', 'sitemap', 'favicon', 'health', 'media', 'media_avatar', 'poster', 'stop_impersonation', 'public_ticket', 'public_ticket_qr'}
 
 
 def _env_cutoff():
@@ -70,6 +70,9 @@ def create_app(config=None):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
         WTF_CSRF_TIME_LIMIT=43200,
         PUBLIC_BASE_URL=os.environ.get('PUBLIC_BASE_URL', '').strip().rstrip('/'),
+        DEEPSEEK_API_KEY=os.environ.get('DEEPSEEK_API_KEY', '').strip(),
+        DEEPSEEK_MODEL=os.environ.get('DEEPSEEK_MODEL', 'deepseek-flash'),
+        CHAT_DAILY_LIMIT=100,
         GOOGLE_CLIENT_ID=os.environ.get('GOOGLE_CLIENT_ID', '').strip(),
         GOOGLE_CLIENT_SECRET=os.environ.get('GOOGLE_CLIENT_SECRET', '').strip(),
         STRIPE_SECRET_KEY=os.environ.get('STRIPE_SECRET_KEY', '').strip(),
@@ -1158,6 +1161,9 @@ def create_app(config=None):
             html_body=html_body, inline_images=images,
         )
 
+    def send_booking_notification(event, ticket, user):
+        send_booking_confirmation(event, ticket, user['id'], user['email'], ticket['reservation_id'])
+
     def payment_booking(session_id):
         if not session_id or session_id.startswith('{'):
             return None
@@ -2031,7 +2037,9 @@ def create_app(config=None):
     def cleanup():
         for table in ('web_sessions', 'password_resets', 'rate_limits'):
             db().execute(f'DELETE FROM {table} WHERE expires_at<now()')
-        click.echo('Expired sessions, tokens and rate limits removed.')
+        db().execute("DELETE FROM assistant_booking_requests WHERE expires_at<now()-interval '30 days'")
+        db().execute("DELETE FROM mcp_tokens WHERE expires_at<now()-interval '30 days' OR revoked_at<now()-interval '30 days'")
+        click.echo('Expired sessions, tokens, proposals and rate limits removed.')
 
     @app.cli.command('seed-demo')
     def seed_demo_command():
@@ -2058,5 +2066,12 @@ def create_app(config=None):
 
     from app.admin_office import register_office
     register_office(app, query, db, text, email_value, money_cents)
+
+    from app.chatbot import register as register_chatbot
+    from app.assistant_tools import ToolService
+    assistant_tools = ToolService(query, db, cutoff_minutes)
+    from app.mcp_server import register as register_mcp
+    register_mcp(app, query, db, assistant_tools, send_booking_notification)
+    register_chatbot(app, query, db, cutoff_minutes, assistant_tools)
 
     return app
