@@ -164,7 +164,7 @@ def booking_email(event, ticket, base_url):
     price = format_price(event.get('price_cents'))
     code = ticket['code']
     paid_note = (
-        'Paiement simulé — projet étudiant : aucun montant n’a été débité.'
+        'Paiement de test confirmé. Mode test — aucun paiement réel.'
         if int(event.get('price_cents') or 0) > 0 else ''
     )
     plain_parts = [

@@ -89,7 +89,7 @@ def organizer_payload(query, owner_id, days):
         (owner_id,),
     )
     recent = query(
-        '''SELECT r.id, r.reserved_at, u.display_name, e.title, e.id AS event_id
+        '''SELECT r.id, r.reserved_at, r.payment_status, r.amount_cents, u.display_name, e.title, e.id AS event_id
            FROM reservations r
            JOIN users u ON u.id=r.member_id
            JOIN events e ON e.id=r.event_id
@@ -144,7 +144,29 @@ def organizer_payload(query, owner_id, days):
         'reviews': reviews,
         'upcoming': upcoming,
         'days': days,
+        'collected': collected_net(query, owner_id),
     }
+
+
+def collected_net(query, owner_id=None):
+    if owner_id is None:
+        row = query(
+            '''SELECT
+                 COALESCE(SUM(amount_cents) FILTER (WHERE payment_status IN ('paid','refunded')),0)
+                 - COALESCE(SUM(refund_cents) FILTER (WHERE payment_status='refunded'),0) AS net
+               FROM reservations''',
+            one=True,
+        )
+    else:
+        row = query(
+            '''SELECT
+                 COALESCE(SUM(r.amount_cents) FILTER (WHERE r.payment_status IN ('paid','refunded')),0)
+                 - COALESCE(SUM(r.refund_cents) FILTER (WHERE r.payment_status='refunded'),0) AS net
+               FROM reservations r JOIN events e ON e.id=r.event_id
+               WHERE e.organizer_id=%s''',
+            (owner_id,), True,
+        )
+    return int(row['net'] or 0)
 
 
 def admin_payload(query, days):
@@ -239,4 +261,5 @@ def admin_payload(query, days):
         'top_activities': top_activities,
         'feed': feed,
         'days': days,
+        'collected': collected_net(query),
     }

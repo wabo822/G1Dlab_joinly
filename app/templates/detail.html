@@ -90,7 +90,13 @@
 <p class="notice">Cette activité est complète.</p>
 {% elif g.user and event.price_cents %}
 <a class="button wide" href="{{ url_for('reserve_confirm', event_id=event.id) }}">Réserver · {{ event.price_cents|pricefr }}</a>
-<p class="notice">Paiement simulé — projet étudiant. Aucune carte bancaire n’est demandée.</p>
+{% if payments_ready %}
+<p class="test-banner">Mode test — aucun paiement réel</p>
+{% elif payment_block == 'refused' %}
+<p class="notice error">Paiement indisponible. Seul le mode test Stripe est autorisé.</p>
+{% else %}
+<p class="notice error">Paiement indisponible.</p>
+{% endif %}
 {% elif g.user %}
 <a class="button wide" href="{{ url_for('reserve_confirm', event_id=event.id) }}">Réserver</a>
 <p class="muted">Annulation possible avant le début. Un récapitulatif vous sera présenté avant confirmation.</p>

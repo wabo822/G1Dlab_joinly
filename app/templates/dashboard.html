@@ -23,6 +23,7 @@
 <article class="panel kpi"><p class="muted">Réservations</p><p class="kpi-value">{{ stats.reservations }}</p></article>
 <article class="panel kpi"><p class="muted">Taux de remplissage</p><p class="kpi-value">{{ fill_rate }} %</p></article>
 <article class="panel kpi"><p class="muted">Revenu simulé</p><p class="kpi-value">{{ net|pricefr }}</p></article>
+<article class="panel kpi"><p class="muted">Revenu encaissé</p><p class="kpi-value">{{ collected|euros }}</p></article>
 <article class="panel kpi"><p class="muted">Contrôle d’entrée</p><p class="kpi-value">{{ checkin_rate }} %</p></article>
 <article class="panel kpi"><p class="muted">Note moyenne</p><p class="kpi-value">{% if rating.n %}{{ rating.avg }} ★{% else %}—{% endif %}</p><p class="muted">{% if rating.n %}{{ rating.n }} avis{% else %}Pas encore d’avis{% endif %}</p></article>
 <article class="panel kpi"><p class="muted">Abonnés</p><p class="kpi-value">{{ stats.followers }}</p></article>
@@ -80,7 +81,7 @@
 <article class="panel">
 <h2>Réservations récentes</h2>
 {% for row in recent %}
-<p>{{ row.display_name }} · <a href="{{ url_for('detail', event_id=row.event_id) }}">{{ row.title }}</a> · {{ row.reserved_at|datefr }}</p>
+<p>{{ row.display_name }} · <a href="{{ url_for('detail', event_id=row.event_id) }}">{{ row.title }}</a> · {{ row.reserved_at|datefr }}{% if row.payment_status and row.payment_status != 'none' %} · {{ payment_labels.get(row.payment_status, '') }}{% endif %}</p>
 {% else %}
 <p class="muted">Pas encore de réservation.</p>
 {% endfor %}
