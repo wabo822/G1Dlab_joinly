@@ -795,22 +795,41 @@ def create_app(config=None):
         return bool(app.config.get('GOOGLE_CLIENT_ID') and app.config.get('GOOGLE_CLIENT_SECRET'))
 
     def default_google_userinfo():
+        import requests
         from authlib.integrations.requests_client import OAuth2Session
+        from authlib.jose import JsonWebToken
+        from authlib.oidc.core import CodeIDToken
+
         redirect_uri = public_base() + url_for('google_callback')
         nonce = session.get('google_nonce')
-        client = OAuth2Session(
+        with OAuth2Session(
             app.config['GOOGLE_CLIENT_ID'], app.config['GOOGLE_CLIENT_SECRET'],
             scope='openid email profile', redirect_uri=redirect_uri,
-            state=session.get('google_state'), nonce=nonce,
+            state=session.get('google_state'),
+            token_endpoint_auth_method='client_secret_post',
+        ) as client:
+            token = client.fetch_token(
+                'https://oauth2.googleapis.com/token',
+                code=request.args.get('code', ''), timeout=10,
+            )
+        if not token.get('id_token'):
+            raise ValueError('Google did not return an ID token')
+        response = requests.get('https://www.googleapis.com/oauth2/v3/certs', timeout=10)
+        response.raise_for_status()
+        claims = JsonWebToken(['RS256']).decode(
+            token['id_token'], key=response.json(), claims_cls=CodeIDToken,
+            claims_options={
+                'iss': {'essential': True, 'values': [
+                    'https://accounts.google.com', 'accounts.google.com',
+                ]},
+            },
+            claims_params={
+                'nonce': nonce, 'client_id': app.config['GOOGLE_CLIENT_ID'],
+                'access_token': token.get('access_token'),
+            },
         )
-        token = client.fetch_token('https://oauth2.googleapis.com/token', code=request.args.get('code', ''))
-        claims = client.parse_id_token(token, nonce=nonce) if token.get('id_token') else {}
-        info = token.get('userinfo') or client.get('https://openidconnect.googleapis.com/v1/userinfo').json()
-        info['sub'] = info.get('sub') or claims.get('sub')
-        info['nonce'] = claims.get('nonce')
-        if 'email_verified' not in info and 'email_verified' in claims:
-            info['email_verified'] = claims.get('email_verified')
-        return info
+        claims.validate(leeway=60)
+        return dict(claims)
 
     app.google_userinfo = default_google_userinfo
 
