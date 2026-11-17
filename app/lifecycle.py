@@ -5,9 +5,9 @@ from zoneinfo import ZoneInfo
 PARIS = ZoneInfo('Europe/Paris')
 POLICIES = ('flexible', 'moderate', 'strict')
 POLICY_LABELS = {
-    'flexible': 'Flexible : annulation gratuite jusqu’à 24 h avant le début. Ensuite, le remboursement simulé est de 0 €.',
-    'moderate': 'Modérée : remboursement simulé intégral jusqu’à 72 h avant le début, sinon 50 %.',
-    'strict': 'Stricte : aucun remboursement simulé.',
+    'flexible': 'Flexible : annulation gratuite jusqu’à 24 h avant le début. Ensuite, le remboursement est de 0 €.',
+    'moderate': 'Modérée : remboursement intégral jusqu’à 72 h avant le début, sinon 50 %.',
+    'strict': 'Stricte : aucun remboursement.',
 }
 
 

@@ -3,5 +3,5 @@
 {% block admin %}
 <h1>Réservations</h1>
 <a href="{{ url_for('admin_reservations_csv') }}">Export CSV</a>
-{% for row in rows %}<p>{{ row.title }} · {{ row.display_name }} · {{ row.email }} · {{ row.status }}</p>{% endfor %}
+{% for row in rows %}<p>{{ row.title }} · {{ row.display_name }} · {{ row.email }} · {{ row.status }}{% if row.payment_status and row.payment_status != 'none' %} · {{ payment_labels.get(row.payment_status, row.payment_status) }}{% if row.amount_cents %} · {{ row.amount_cents|euros }}{% endif %}{% endif %}</p>{% endfor %}
 {% endblock %}

@@ -78,8 +78,10 @@ La migration `002_web` ajoute sessions, demandes de contact, limites de débit e
 jetons de réinitialisation. La migration `003_privacy` autorise le type
 `privacy` dans `legal_pages`. La migration `004_interests_pricing` ajoute
 `categories.icon`, la table `user_interests`, `events.price_cents` (0 = gratuit)
-et `events.view_count`. L’encaissement réel et l’historique IA restent hors schéma :
-l’application ne fait que simuler la confirmation d’un prix.
+et `events.view_count`. La migration `017_stripe_payments` fixe la devise EUR
+et ajoute le statut de paiement, la session Checkout, l’intention de paiement
+et le montant sur `reservations`. Seul le mode test Stripe est branché.
+L’historique IA reste hors schéma.
 
 ## Vérification et migrations
 

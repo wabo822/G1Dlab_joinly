@@ -1,37 +1,36 @@
 {% extends 'base.html' %}
-{% block title %}Paiement simulé — {{ event.title }} — Joinly{% endblock %}
-{% block description %}Confirmation de réservation pour une activité payante. Aucun paiement réel n’est encaissé : projet étudiant Joinly.{% endblock %}
+{% block title %}{% if outcome == 'success' %}Paiement reçu{% else %}Paiement annulé{% endif %} — Joinly{% endblock %}
+{% block description %}Retour du paiement de test Stripe. Aucun paiement réel n’est encaissé.{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
 {% block content %}
 <section class="container section narrow">
-<a href="{{ url_for('detail', event_id=event.id) }}">← {{ event.title }}</a>
-<p class="eyebrow">PAIEMENT SIMULÉ — PROJET ÉTUDIANT</p>
-<h1>Confirmer la réservation.</h1>
-<div class="panel stack">
-<p class="notice">Paiement simulé — projet étudiant. Aucun montant n’est débité et aucune carte bancaire n’est demandée.</p>
-<h2>{{ event.title }}</h2>
-<dl>
-<dt>Tarif</dt>
-<dd>{{ event.price_cents|pricefr }}</dd>
-<dt>Annulation</dt>
-<dd>{{ policy_labels.get(event.cancellation_policy, '') }}</dd>
-<dt>Début</dt>
-<dd>{{ event.starts_at|datefr }}</dd>
-<dt>Lieu</dt>
-<dd>{{ event.location }}</dd>
-</dl>
-{% if event.status != 'published' or event.starts_at <= now or event.available <= 0 %}
-<p class="notice">Cette activité n’est plus réservable.</p>
-{% elif booking %}
-<p class="notice success">Votre place est déjà réservée.</p>
-<a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
+{% if booking %}
+<a href="{{ url_for('detail', event_id=booking.event_id) }}">← {{ booking.title }}</a>
 {% else %}
-<form method="post" action="{{ url_for('reserve', event_id=event.id) }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<input type="hidden" name="payment_simulated" value="1">
-<button class="wide">Confirmer le paiement simulé · {{ event.price_cents|pricefr }}</button>
-</form>
-<p class="muted">Annulation possible avant le début de l’activité, depuis votre espace. Il n’y a pas de remboursement à traiter : le paiement n’a pas été encaissé.</p>
+<a href="{{ url_for('activities') }}">← Activités</a>
+{% endif %}
+<p class="eyebrow">PAIEMENT</p>
+<p class="test-banner">Mode test — aucun paiement réel</p>
+<div class="panel stack">
+{% if outcome == 'success' %}
+{% if booking and booking.status == 'confirmed' %}
+<h1>Votre place est confirmée.</h1>
+<p>Le paiement de test est validé. Le billet est aussi envoyé par e-mail.</p>
+{% if booking.token %}
+<a class="button" href="{{ url_for('public_ticket', token=booking.token) }}">Voir le billet</a>
+{% endif %}
+<a class="button secondary" href="{{ url_for('account') }}">Mon espace</a>
+{% else %}
+<h1>Paiement en cours de vérification.</h1>
+<p>La place n’est confirmée qu’une fois le paiement validé. Le billet et l’e-mail partent à ce moment-là. Vous pouvez actualiser cette page dans un instant.</p>
+<a class="button secondary" href="{{ url_for('account') }}">Mon espace</a>
+{% endif %}
+{% else %}
+<h1>Paiement annulé.</h1>
+<p>Aucun montant n’a été débité. La place a été libérée.</p>
+{% if booking %}
+<a class="button" href="{{ url_for('detail', event_id=booking.event_id) }}">Retour à l’activité</a>
+{% endif %}
 {% endif %}
 </div>
 </section>

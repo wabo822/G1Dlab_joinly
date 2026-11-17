@@ -674,7 +674,7 @@ dd {
   background:#ffe6e0;
   color:#8e2f24;
 }
-.badge-draft {
+.badge-draft,.badge-pending {
   background:#fff4d6;
   color:#6d5310;
 }
@@ -782,6 +782,13 @@ input:focus,select:focus,textarea:focus {
 .notice.error {
   background:#ffe6e0;
   color:#8e2f24;
+}
+.test-banner {
+  padding:15px 20px;
+  border-radius:12px;
+  background:#fff4d6;
+  color:#6d5310;
+  font-weight:700;
 }
 .notifications {
   padding-top:25px;

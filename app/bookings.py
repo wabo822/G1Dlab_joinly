@@ -23,13 +23,17 @@ def create_booking(conn, user_id, event_id, cutoff, paid, expected=None, idempot
         raise NotFound()
     if expected is not None and snapshot(event) != expected:
         raise ValueError('Les informations ont changé. Demandez une nouvelle proposition à l’assistant.')
-    if idempotent:
-        old = conn.execute("SELECT id FROM reservations WHERE event_id=%s AND member_id=%s AND status='confirmed'",
-                           (event_id, user_id)).fetchone()
-        if old:
-            return event, issue_ticket(conn, old['id']), False
-    count = conn.execute("SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status='confirmed'",
-                         (event_id,)).fetchone()['n']
+    existing = conn.execute(
+        """SELECT id, status FROM reservations
+           WHERE event_id=%s AND member_id=%s AND status IN ('confirmed','pending')""",
+        (event_id, user_id)).fetchone()
+    if existing and existing['status'] == 'confirmed' and idempotent:
+        return event, issue_ticket(conn, existing['id']), False
+    if existing and existing['status'] == 'pending':
+        raise ValueError('Un paiement est déjà en cours pour cette activité. Il expire automatiquement.')
+    count = conn.execute(
+        "SELECT count(*) AS n FROM reservations WHERE event_id=%s AND status IN ('confirmed','pending')",
+        (event_id,)).fetchone()['n']
     reason = booking_block(event, cutoff_minutes=cutoff, available=event['capacity'] - count)
     if reason:
         raise ValueError(BLOCK_MESSAGES[reason])

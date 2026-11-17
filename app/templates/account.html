@@ -12,16 +12,21 @@
 <h2>Mes inscriptions</h2>
 {% for b in bookings %}
 <article class="panel booking-row">
-<span class="badge {{ 'badge-published' if b.status == 'confirmed' else 'badge-cancelled' }}">{{ 'Confirmée' if b.status == 'confirmed' else 'Annulée' }}</span>
+<span class="badge {{ 'badge-published' if b.status == 'confirmed' else 'badge-pending' if b.status == 'pending' else 'badge-cancelled' }}">{{ 'Confirmée' if b.status == 'confirmed' else 'Paiement en attente' if b.status == 'pending' else 'Annulée' }}</span>
 <h3>
 <a href="{{ url_for('detail',event_id=b.event_id) }}">{{ b.title }}</a>
 </h3>
 <p>{{ b.starts_at|datefr }} · {{ b.location }}</p>
-{% if b.status=='confirmed' and b.starts_at>now %}
-<p class="muted">Remboursement simulé si vous annulez maintenant : {{ refund_preview(b)|pricefr }}.</p>
+{% if b.payment_status and b.payment_status != 'none' %}
+<p class="muted">{{ payment_labels.get(b.payment_status, '') }}{% if b.amount_cents %} · {{ b.amount_cents|euros }}{% endif %}</p>
+{% endif %}
+{% if b.status=='confirmed' and b.starts_at>now and b.price_cents %}
+<p class="muted">Remboursement si vous annulez maintenant : {{ refund_preview(b)|pricefr }}.</p>
+{% endif %}
+{% if b.status in ('confirmed', 'pending') and b.starts_at>now %}
 <form method="post" action="{{ url_for('cancel_booking',booking_id=b.id) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<button class="secondary small">Annuler ma réservation</button>
+<button class="secondary small">{% if b.status == 'pending' %}Annuler le paiement{% else %}Annuler ma réservation{% endif %}</button>
 </form>
 {% endif %}
 </article>

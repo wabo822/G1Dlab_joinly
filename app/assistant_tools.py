@@ -76,7 +76,7 @@ def wire(value):
 EVENT_SQL = '''SELECT e.id,e.title,left(e.description,2000) AS description,e.location,e.starts_at,e.ends_at,
  e.price_cents,e.cancellation_policy,e.capacity,e.status,c.name AS category,u.display_name AS organizer,
  (u.email LIKE '%%@demo.joinly.fr' OR e.title ILIKE '%%[Démo]%%' OR e.description ILIKE '%%démonstration%%') AS demo,
- e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed') AS available
+ e.capacity-(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status IN ('confirmed','pending')) AS available
  FROM events e LEFT JOIN categories c ON c.id=e.category_id JOIN users u ON u.id=e.organizer_id'''
 
 
@@ -101,7 +101,7 @@ class ToolService:
 
     def search_activities(self, args, user_id, token_id):
         where = ["e.status='published'", 'e.starts_at>now()+%s',
-                 "e.capacity>(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status='confirmed')"]
+                 "e.capacity>(SELECT count(*) FROM reservations r WHERE r.event_id=e.id AND r.status IN ('confirmed','pending'))"]
         values = [timedelta(minutes=self.cutoff())]
         for key, column in [('query', "concat_ws(' ',e.title,e.description,e.location,c.name)"), ('location', 'e.location'), ('category', 'c.name')]:
             if args.get(key):
@@ -149,8 +149,13 @@ class ToolService:
 
     def book_activity(self, args, user_id, token_id):
         event = self.activity(args['event_id'])
-        old = self.query("SELECT id FROM reservations WHERE member_id=%s AND event_id=%s AND status='confirmed'", (user_id,event['id']),True)
-        if old: return {'status':'already_booked', 'booking_id':old['id'], 'url':'/account'}
+        old = self.query(
+            "SELECT id, status FROM reservations WHERE member_id=%s AND event_id=%s AND status IN ('confirmed','pending')",
+            (user_id, event['id']), True)
+        if old and old['status'] == 'confirmed':
+            return {'status': 'already_booked', 'booking_id': old['id'], 'url': '/account'}
+        if old:
+            raise ToolError('Un paiement est déjà en cours pour cette activité.')
         if event['booking_block']: raise ToolError(BLOCK_MESSAGES[event['booking_block']])
         # Reuse equivalent live proposals, so a retry does not create many confirmation links.
         with self.db().transaction():

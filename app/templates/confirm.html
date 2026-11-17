@@ -8,8 +8,16 @@
 <p class="eyebrow">CONFIRMATION</p>
 <h1>Vérifiez votre inscription.</h1>
 <div class="panel stack">
+{% if confirmation_action %}
 {% if event.price_cents %}
 <p class="notice">Paiement simulé — projet étudiant. Aucun montant n’est débité et aucune carte bancaire n’est demandée.</p>
+{% endif %}
+{% elif event.price_cents and payments_ready %}
+<p class="test-banner">Mode test — aucun paiement réel</p>
+{% elif event.price_cents and payment_block == 'refused' %}
+<p class="notice error">Paiement indisponible. Seul le mode test Stripe est autorisé.</p>
+{% elif event.price_cents %}
+<p class="notice error">Paiement indisponible.</p>
 {% endif %}
 <h2>{{ event.title }}</h2>
 <dl class="confirm-recap">
@@ -24,10 +32,11 @@
 <dt>Places restantes</dt>
 <dd>{{ event.available if event.available > 0 else 0 }} / {{ event.capacity }}</dd>
 <dt>Annulation</dt>
-<dd>{{ policy_labels.get(event.cancellation_policy, '') }}{% if event.price_cents %} Remboursement simulé si vous annulez maintenant : {{ refund_preview(event)|pricefr }}.{% endif %}</dd>
+<dd>{{ policy_labels.get(event.cancellation_policy, '') }}{% if event.price_cents %} Remboursement si vous annulez maintenant : {{ refund_preview(event)|pricefr }}.{% endif %}</dd>
 <dt>Participant</dt>
 <dd>{{ g.user.display_name }} · {{ g.user.email }}</dd>
 </dl>
+{% if confirmation_action %}
 {% if not reservable %}
 <p class="notice error">{{ reason }}</p>
 <a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
@@ -35,7 +44,7 @@
 <p class="notice success">Votre place est déjà réservée.</p>
 <a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
 {% else %}
-<form method="post" action="{{ confirmation_action or url_for('reserve', event_id=event.id) }}" class="stack">
+<form method="post" action="{{ confirmation_action }}" class="stack">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="hidden" name="confirm" value="1">
 {% if event.price_cents %}
@@ -46,10 +55,45 @@
 J’ai vérifié ces informations
 </label>
 <div class="actions">
-<button>{% if event.price_cents %}Confirmer la réservation{% else %}Confirmer la réservation{% endif %}</button>
+<button>Confirmer la réservation</button>
 <a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
 </div>
 </form>
+{% endif %}
+{% else %}
+{% if not reservable %}
+<p class="notice error">{{ reason }}</p>
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+{% elif booking and booking.status == 'confirmed' %}
+<p class="notice success">Votre place est déjà réservée.</p>
+<a class="button" href="{{ url_for('account') }}">Voir mon inscription</a>
+{% elif booking and booking.status == 'pending' %}
+<p class="notice">Un paiement est déjà en cours. La place est gardée 30 minutes.</p>
+<form method="post" action="{{ url_for('reserve', event_id=event.id) }}" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="confirm" value="1">
+<input type="hidden" name="acknowledged" value="1">
+<button>Reprendre le paiement</button>
+</form>
+{% elif event.price_cents and not payments_ready %}
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+{% else %}
+<form method="post" action="{{ url_for('reserve', event_id=event.id) }}" class="stack">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="confirm" value="1">
+<label class="check">
+<input type="checkbox" name="acknowledged" value="1" required>
+J’ai vérifié ces informations
+</label>
+<div class="actions">
+<button>{% if event.price_cents %}Continuer vers le paiement{% else %}Confirmer la réservation{% endif %}</button>
+<a class="button secondary" href="{{ url_for('detail', event_id=event.id) }}">Retour</a>
+</div>
+</form>
+{% if event.price_cents %}
+<p class="muted">La place est gardée 30 minutes. Elle n’est confirmée qu’après le paiement, et le billet est envoyé à ce moment-là.</p>
+{% endif %}
+{% endif %}
 {% endif %}
 </div>
 </section>
