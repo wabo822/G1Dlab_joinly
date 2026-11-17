@@ -151,6 +151,12 @@ def test_paid_checkout_webhook_refund_and_guards(app, db, monkeypatch):
     started = client.post(f'/activities/{eid}/reserve', data=CONFIRM)
     assert started.status_code == 302
     assert started.headers['Location'] == CHECKOUT
+    form_action = next(
+        piece.strip()
+        for piece in started.headers['Content-Security-Policy'].split(';')
+        if piece.strip().startswith('form-action')
+    )
+    assert 'https://checkout.stripe.com' in form_action
     assert created[0]['line_items'][0]['price_data']['currency'] == 'eur'
     assert created[0]['line_items'][0]['price_data']['unit_amount'] == 1250
     assert created[0]['success_url'].endswith('/paiement/succes?session_id={CHECKOUT_SESSION_ID}')

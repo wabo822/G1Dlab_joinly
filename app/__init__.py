@@ -166,7 +166,7 @@ def create_app(config=None):
             "https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; "
             "style-src 'self' https://unpkg.com; script-src 'self' https://unpkg.com; "
             "worker-src 'self' blob:; media-src 'self' blob:; "
-            "form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+            "form-action 'self' https://checkout.stripe.com; frame-ancestors 'none'; base-uri 'self'"
         )
         if request.path in ('/robots.txt', '/sitemap.xml'):
             response.headers['Cache-Control'] = 'public, max-age=3600'
